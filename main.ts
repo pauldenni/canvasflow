@@ -4,6 +4,7 @@ interface CanvasFlowSettings {
   enabledByDefault: boolean;
   focusCardOnClick: boolean;
   lockHorizontal: boolean;
+  allowNativeZoomWhenLocked: boolean;
   reverseVerticalScroll: boolean;
   verticalScrollSpeed: number;
   targetZoom: number;
@@ -17,6 +18,7 @@ const DEFAULT_SETTINGS: CanvasFlowSettings = {
   enabledByDefault: false,
   focusCardOnClick: true,
   lockHorizontal: true,
+  allowNativeZoomWhenLocked: true,
   reverseVerticalScroll: true,
   verticalScrollSpeed: 1,
   targetZoom: 1.1,
@@ -35,7 +37,7 @@ export default class CanvasFlowPlugin extends Plugin {
   private flowEnabled = false;
   private focusedNodeEl: HTMLElement | null = null;
   private statusEl: HTMLElement | null = null;
-  private backButtonEl: HTMLElement | null = null;
+  private backButtonEl: HTMLButtonElement | null = null;
   private lastKnownX: number | null = null;
   private viewportStack: Array<{ x: number; y: number; zoom: number }> = [];
 
@@ -177,6 +179,14 @@ export default class CanvasFlowPlugin extends Plugin {
     if (!canvas) return;
 
     if (this.settings.lockHorizontal) {
+      const isZoom = evt.ctrlKey || evt.metaKey;
+
+      if (isZoom && this.settings.allowNativeZoomWhenLocked) {
+        // Let native zoom happen, then sync lastKnownX to wherever canvas settled
+        window.requestAnimationFrame(() => this.captureCurrentHorizontalPosition(canvas));
+        return;
+      }
+
       evt.preventDefault();
       evt.stopPropagation();
 
@@ -418,7 +428,7 @@ export default class CanvasFlowPlugin extends Plugin {
     }
 
     if (!this.backButtonEl) {
-      this.backButtonEl = document.createElement("button");
+      this.backButtonEl = document.createElement("button") as HTMLButtonElement;
       this.backButtonEl.className = "canvasflow-back-button";
       this.backButtonEl.type = "button";
       this.backButtonEl.textContent = "← Back to canvas";
@@ -497,6 +507,16 @@ class CanvasFlowSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.lockHorizontal)
         .onChange(async value => {
           this.plugin.settings.lockHorizontal = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Allow zoom when horizontal is locked")
+      .setDesc("Pinch or Ctrl+scroll to zoom works normally even when horizontal movement is locked. After zooming, the locked horizontal position updates to match.")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.allowNativeZoomWhenLocked)
+        .onChange(async value => {
+          this.plugin.settings.allowNativeZoomWhenLocked = value;
           await this.plugin.saveSettings();
         }));
 
