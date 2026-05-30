@@ -1,4 +1,4 @@
-# CanvasFlow
+# CanvasFlow - Obsidian Plugin
 
 CanvasFlow is an experimental Obsidian plugin that adds a focused, vertically scrollable dashboard/navigation mode for Canvas.
 
