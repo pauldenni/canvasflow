@@ -1,0 +1,44 @@
+body.canvasflow-enabled .canvasflow-active-node {
+  outline: 3px solid var(--interactive-accent);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+body.canvasflow-enabled .canvas-wrapper,
+body.canvasflow-enabled .canvas {
+  overscroll-behavior: contain;
+}
+
+.canvasflow-status {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 9999;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+  font-size: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  pointer-events: none;
+}
+
+.canvasflow-back-button {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  box-shadow: 0 4px 16px rgba(0,0,0,.22);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.canvasflow-back-button:hover {
+  background: var(--background-secondary);
+}

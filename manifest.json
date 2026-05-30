@@ -1,0 +1,10 @@
+{
+  "id": "canvasflow",
+  "name": "CanvasFlow",
+  "version": "0.1.4",
+  "minAppVersion": "1.5.0",
+  "description": "Adds a focused, vertically scrollable dashboard/navigation mode for Obsidian Canvas.",
+  "author": "Paul Denni",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}
