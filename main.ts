@@ -4,35 +4,35 @@ import { CardFormatting } from "./src/cardFormatting";
 interface CanvasFlowSettings {
   enabledByDefault: boolean;
   focusCardOnClick: boolean;
-  lockHorizontal: boolean;
-  allowNativeZoomWhenLocked: boolean;
-  reverseVerticalScroll: boolean;
-  verticalScrollSpeed: number;
-  targetZoom: number;
+  /** Percent of the screen a focused card should fill. */
+  focusSize: number;
   showStatusPill: boolean;
   showBackButton: boolean;
   exitFocusOnEscape: boolean;
-  exitFocusOnBackgroundClick: boolean;
   showCardFormatting: boolean;
 }
 
 const DEFAULT_SETTINGS: CanvasFlowSettings = {
   enabledByDefault: false,
   focusCardOnClick: true,
-  lockHorizontal: true,
-  allowNativeZoomWhenLocked: true,
-  reverseVerticalScroll: true,
-  verticalScrollSpeed: 1,
-  targetZoom: 1.1,
+  focusSize: 50,
   showStatusPill: true,
   showBackButton: true,
   exitFocusOnEscape: true,
-  exitFocusOnBackgroundClick: true,
   showCardFormatting: true,
 };
 
 type CanvasView = any;
 type CanvasObject = any;
+type Viewport = { x: number; y: number; zoom: number };
+
+/** Never zoom past 200% when focusing, so small cards don't blow up. */
+const MAX_FOCUS_SCALE = 2;
+const GLIDE_DURATION_MS = 550;
+/** Deepest mid-glide pull-back, in log2 zoom units (0.35 is about 22% further out). */
+const MAX_PULL_BACK = 0.35;
+/** Pointer movement beyond this between press and release counts as a drag, not a click. */
+const DRAG_THRESHOLD_PX = 5;
 
 export default class CanvasFlowPlugin extends Plugin {
   settings: CanvasFlowSettings;
@@ -42,8 +42,9 @@ export default class CanvasFlowPlugin extends Plugin {
   private focusedNodeEl: HTMLElement | null = null;
   private statusEl: HTMLElement | null = null;
   private backButtonEl: HTMLButtonElement | null = null;
-  private lastKnownX: number | null = null;
-  private viewportStack: Array<{ x: number; y: number; zoom: number }> = [];
+  private viewportStack: Viewport[] = [];
+  private pointerDownAt: { x: number; y: number } | null = null;
+  private panFrame: number | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -53,7 +54,7 @@ export default class CanvasFlowPlugin extends Plugin {
     this.cardFormatting = new CardFormatting(this, () => this.settings.showCardFormatting);
     this.cardFormatting.load();
 
-    this.addRibbonIcon("move-vertical", "Toggle CanvasFlow", () => {
+    this.addRibbonIcon("focus", "Toggle CanvasFlow", () => {
       this.toggleFlowMode();
     });
 
@@ -81,8 +82,9 @@ export default class CanvasFlowPlugin extends Plugin {
       callback: () => this.showCanvasDiagnostics(),
     });
 
+    this.registerDomEvent(document, "pointerdown", (evt: PointerEvent) => this.handlePointerDown(evt), true);
     this.registerDomEvent(document, "click", (evt: MouseEvent) => this.handleDocumentClick(evt), true);
-    this.registerDomEvent(document, "wheel", (evt: WheelEvent) => this.handleWheel(evt), { capture: true, passive: false } as AddEventListenerOptions);
+    this.registerDomEvent(document, "wheel", (evt: WheelEvent) => this.handleWheel(evt), { capture: true, passive: false });
     this.registerDomEvent(document, "keydown", (evt: KeyboardEvent) => this.handleKeydown(evt), true);
 
     this.app.workspace.onLayoutReady(() => {
@@ -93,11 +95,18 @@ export default class CanvasFlowPlugin extends Plugin {
   }
 
   onunload() {
+    this.cancelPan();
     this.disableFlowMode();
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    // Only keep current settings, so options removed in later versions drop out of data.json.
+    const saved = (await this.loadData()) ?? {};
+    const settings: any = { ...DEFAULT_SETTINGS };
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      if (key in saved) settings[key] = saved[key];
+    }
+    this.settings = settings;
   }
 
   async saveSettings() {
@@ -139,6 +148,18 @@ export default class CanvasFlowPlugin extends Plugin {
     return view?.canvas ?? null;
   }
 
+  private handlePointerDown(evt: PointerEvent) {
+    this.pointerDownAt = { x: evt.clientX, y: evt.clientY };
+    this.cancelPan();
+  }
+
+  /** True when the pointer moved between press and release, i.e. the user dragged the canvas or a card. */
+  private wasDrag(evt: MouseEvent): boolean {
+    const start = this.pointerDownAt;
+    if (!start) return false;
+    return Math.hypot(evt.clientX - start.x, evt.clientY - start.y) > DRAG_THRESHOLD_PX;
+  }
+
   private handleDocumentClick(evt: MouseEvent) {
     if (!this.flowEnabled) return;
 
@@ -152,61 +173,29 @@ export default class CanvasFlowPlugin extends Plugin {
       return;
     }
 
-    // Clicks on Canvas chrome (the card action bar, zoom controls, popups) are not background clicks.
+    // Moving a card ends in a click; that's not a request to focus it.
+    if (this.wasDrag(evt)) return;
+
+    // Only clicks on cards do anything. The blank canvas, the card action bar and other controls are left to Obsidian.
     if (target.closest(".canvas-menu-container, .canvas-menu, .canvas-controls, .canvas-card-menu, .menu")) return;
 
     const nodeEl = target.closest(".canvas-node") as HTMLElement | null;
-
-    if (!nodeEl) {
-      const clickedCanvasBackground = !!target.closest(".canvas-wrapper, .canvas");
-      if (clickedCanvasBackground && this.settings.exitFocusOnBackgroundClick && this.viewportStack.length > 0) {
-        this.zoomBackOut();
-      }
-      return;
-    }
+    if (!nodeEl) return;
 
     if (!this.settings.focusCardOnClick) return;
-    if (nodeEl === this.focusedNodeEl) return;
 
-    this.setFocusedNode(nodeEl);
-
-    window.setTimeout(() => {
-      const current = this.getCurrentViewport();
-      if (current) this.viewportStack.push(current);
-      this.focusElement(nodeEl);
-      this.updateBackButton();
-      this.updateStatusPill();
-    }, 0);
-  }
-
-  private handleWheel(evt: WheelEvent) {
-    if (!this.flowEnabled) return;
-
-    const target = evt.target as HTMLElement | null;
-    const isCanvas = !!target?.closest(".canvas-wrapper, .canvas");
-    if (!isCanvas) return;
+    // Second click of a double-click (which opens the card for editing), or clicks while editing.
+    if (evt.detail > 1) return;
+    if (nodeEl.classList.contains("is-editing") || target.closest(".cm-editor, .markdown-source-view")) return;
 
     const canvas = this.getCanvasObject();
-    if (!canvas) return;
+    const node = canvas ? this.findNodeForElement(canvas, nodeEl) : null;
+    if (!canvas || !node) return;
 
-    if (this.settings.lockHorizontal) {
-      const isZoom = evt.ctrlKey || evt.metaKey;
+    // Clicking the card that's already focused just re-centers it, without adding a "back" level.
+    const alreadyFocused = nodeEl === this.focusedNodeEl;
 
-      if (isZoom && this.settings.allowNativeZoomWhenLocked) {
-        // Let native zoom happen, then sync lastKnownX to wherever canvas settled
-        window.requestAnimationFrame(() => this.captureCurrentHorizontalPosition(canvas));
-        return;
-      }
-
-      evt.preventDefault();
-      evt.stopPropagation();
-
-      const direction = this.settings.reverseVerticalScroll ? -1 : 1;
-      const verticalDelta = evt.deltaY * this.settings.verticalScrollSpeed * direction;
-
-      this.panCanvasVertically(canvas, verticalDelta);
-      this.restoreHorizontalPosition(canvas);
-    }
+    window.setTimeout(() => this.focusNode(canvas, node, !alreadyFocused), 0);
   }
 
   private handleKeydown(evt: KeyboardEvent) {
@@ -224,22 +213,17 @@ export default class CanvasFlowPlugin extends Plugin {
 
   /**
    * Obsidian's canvas animates toward a target viewport (tx, ty, tZoom); x, y
-   * and zoom are the in-between values. Read the target so we never save or
-   * restore a position from the middle of an animation.
+   * and zoom are the in-between values. Read the target so we never save a
+   * position from the middle of an animation. x/y are the canvas point at the
+   * center of the screen; zoom is log2 of the scale (0 = 100%).
    */
-  private readViewport(canvas: CanvasObject): { x: number; y: number; zoom: number } {
-    return {
-      x: canvas.tx ?? canvas.x,
-      y: canvas.ty ?? canvas.y,
-      zoom: canvas.tZoom ?? canvas.zoom,
-    };
-  }
-
-  private getCurrentViewport(): { x: number; y: number; zoom: number } | null {
+  private getCurrentViewport(): Viewport | null {
     const canvas = this.getCanvasObject();
     if (!canvas) return null;
 
-    const { x, y, zoom } = this.readViewport(canvas);
+    const x = canvas.tx ?? canvas.x;
+    const y = canvas.ty ?? canvas.y;
+    const zoom = canvas.tZoom ?? canvas.zoom;
 
     if (typeof x === "number" && typeof y === "number" && typeof zoom === "number") {
       return { x, y, zoom };
@@ -248,161 +232,135 @@ export default class CanvasFlowPlugin extends Plugin {
     return null;
   }
 
+  /**
+   * Glide the canvas to a viewport. Used for every focus and back move so they
+   * all look the same.
+   *
+   * We animate ourselves instead of using Obsidian's built-in animation: that
+   * one skips pans that don't change the zoom (it jumps in one frame), and
+   * leftover trackpad momentum makes it jump to the end.
+   *
+   * For moves at a similar zoom (card to card), the camera pulls back a little
+   * in the middle so you can see where it's going.
+   */
+  private moveViewport(canvas: CanvasObject, to: Viewport) {
+    this.cancelPan();
+
+    const from = this.getCurrentViewport();
+    if (!from || typeof canvas.setViewport !== "function") {
+      if (typeof canvas.markViewportChanged === "function") {
+        canvas.tx = to.x;
+        canvas.ty = to.y;
+        canvas.tZoom = to.zoom;
+        canvas.zoomCenter = null;
+        canvas.markViewportChanged();
+      }
+      return;
+    }
+
+    // Pull-back depth (log2 zoom units): grows with how far we travel on screen,
+    // fades out for moves that already zoom a lot.
+    const rect = canvas.canvasRect ?? canvas.wrapperEl?.getBoundingClientRect?.();
+    const screenDistance = Math.hypot(to.x - from.x, to.y - from.y) * Math.pow(2, from.zoom);
+    const travel = rect?.width ? Math.min(1, screenDistance / rect.width) : 0;
+    const zoomChange = Math.abs(to.zoom - from.zoom);
+    const pullBack = MAX_PULL_BACK * travel * Math.max(0, 1 - zoomChange / 0.5);
+
+    const startedAt = performance.now();
+    const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+    const step = (now: number) => {
+      const t = Math.max(0, Math.min(1, (now - startedAt) / GLIDE_DURATION_MS));
+      const k = easeInOutCubic(t);
+      canvas.setViewport(
+        from.x + (to.x - from.x) * k,
+        from.y + (to.y - from.y) * k,
+        from.zoom + (to.zoom - from.zoom) * k - pullBack * Math.sin(Math.PI * t),
+      );
+      this.panFrame = t < 1 ? window.requestAnimationFrame(step) : null;
+    };
+
+    this.panFrame = window.requestAnimationFrame(step);
+  }
+
+  private cancelPan() {
+    if (this.panFrame !== null) window.cancelAnimationFrame(this.panFrame);
+    this.panFrame = null;
+  }
+
+  /** Swallow scrolls during a glide so trackpad momentum can't knock it off course. */
+  private handleWheel(evt: WheelEvent) {
+    if (this.panFrame === null) return;
+    if (!(evt.target as HTMLElement | null)?.closest?.(".canvas-wrapper")) return;
+    evt.preventDefault();
+    evt.stopPropagation();
+  }
+
   private zoomBackOut() {
     const canvas = this.getCanvasObject();
     const previous = this.viewportStack.pop();
 
-    if (!canvas || !previous) {
-      this.clearFocusedNode();
-      this.updateBackButton();
-      this.updateStatusPill();
-      return;
-    }
-
-    this.animateViewport(canvas, previous.x, previous.y, previous.zoom);
-    this.lastKnownX = previous.x;
+    if (canvas && previous) this.moveViewport(canvas, previous);
 
     // We've left that card's view, so clicking it again should focus it again.
     this.clearFocusedNode();
-
     this.updateBackButton();
     this.updateStatusPill();
-  }
-
-  private animateViewport(canvas: CanvasObject, x: number, y: number, zoom: number) {
-    const start = this.getCurrentViewport();
-
-    if (!start || typeof canvas.setViewport !== "function") {
-      if (typeof canvas.setViewport === "function") {
-        canvas.setViewport(x, y, zoom);
-      }
-      return;
-    }
-
-    const duration = 220;
-    const startedAt = performance.now();
-    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-
-    const step = (now: number) => {
-      const progress = Math.min(1, (now - startedAt) / duration);
-      const eased = easeOutCubic(progress);
-
-      const nextX = start.x + (x - start.x) * eased;
-      const nextY = start.y + (y - start.y) * eased;
-      const nextZoom = start.zoom + (zoom - start.zoom) * eased;
-
-      canvas.setViewport(nextX, nextY, nextZoom);
-
-      if (progress < 1) {
-        requestAnimationFrame(step);
-      }
-    };
-
-    requestAnimationFrame(step);
-  }
-
-  private panCanvasVertically(canvas: CanvasObject, deltaY: number) {
-    const target = this.readViewport(canvas);
-    const currentX = target.x ?? 0;
-    const currentY = target.y ?? 0;
-    const zoom = target.zoom ?? 0;
-
-    if (this.lastKnownX === null) this.lastKnownX = currentX;
-
-    if (typeof canvas.setViewport === "function") {
-      canvas.setViewport(this.lastKnownX, currentY - deltaY, zoom);
-      return;
-    }
-
-    if (typeof canvas.panTo === "function") {
-      canvas.panTo(this.lastKnownX, currentY - deltaY);
-      return;
-    }
-
-    if (typeof canvas.setPan === "function") {
-      canvas.setPan(this.lastKnownX, currentY - deltaY);
-    }
-  }
-
-  private restoreHorizontalPosition(canvas: CanvasObject) {
-    if (this.lastKnownX === null) return;
-
-    const target = this.readViewport(canvas);
-    const currentY = target.y ?? 0;
-    const zoom = target.zoom ?? 0;
-
-    if (typeof canvas.setViewport === "function") {
-      canvas.setViewport(this.lastKnownX, currentY, zoom);
-    }
   }
 
   private focusSelectedCanvasCard() {
-    const selected = document.querySelector(".canvas-node.is-selected, .canvas-node.mod-selected, .canvas-node.canvas-node-selected") as HTMLElement | null;
+    const canvas = this.getCanvasObject();
+    const selected = canvas?.selection ? Array.from(canvas.selection as Set<any>).find((item: any) => item?.nodeEl) : null;
 
-    if (!selected) {
-      new Notice("No selected Canvas card found");
+    if (!canvas || !selected) {
+      new Notice("Select a Canvas card first");
       return;
     }
 
-    const current = this.getCurrentViewport();
-    if (current) this.viewportStack.push(current);
+    this.focusNode(canvas, selected, true);
+  }
 
-    this.setFocusedNode(selected);
-    this.focusElement(selected);
+  /**
+   * Zoom so the card fills `focusSize`% of the screen (capped at 200% zoom for
+   * small cards) and center it, regardless of the current zoom level.
+   */
+  private focusNode(canvas: CanvasObject, node: any, pushHistory: boolean) {
+    const bbox = this.getNodeBBox(node);
+    const rect = canvas.canvasRect ?? canvas.wrapperEl?.getBoundingClientRect?.();
+    if (!bbox || !rect || !rect.width || !rect.height) return;
+
+    if (pushHistory) {
+      const current = this.getCurrentViewport();
+      if (current) this.viewportStack.push(current);
+    }
+
+    const fill = this.settings.focusSize / 100;
+    const width = Math.max(1, bbox.maxX - bbox.minX);
+    const height = Math.max(1, bbox.maxY - bbox.minY);
+    const scale = Math.min((rect.width * fill) / width, (rect.height * fill) / height, MAX_FOCUS_SCALE);
+
+    this.moveViewport(canvas, {
+      x: (bbox.minX + bbox.maxX) / 2,
+      y: (bbox.minY + bbox.maxY) / 2,
+      zoom: Math.log2(scale),
+    });
+
+    if (node.nodeEl) this.setFocusedNode(node.nodeEl);
     this.updateBackButton();
     this.updateStatusPill();
   }
 
-  private focusElement(nodeEl: HTMLElement) {
-    const canvas = this.getCanvasObject();
-    const rect = nodeEl.getBoundingClientRect();
+  private getNodeBBox(node: any): { minX: number; minY: number; maxX: number; maxY: number } | null {
+    try {
+      const bbox = node.getBBox?.();
+      if (bbox && [bbox.minX, bbox.minY, bbox.maxX, bbox.maxY].every((v: unknown) => typeof v === "number")) return bbox;
+    } catch {}
 
-    if (canvas) {
-      const node = this.findNodeForElement(canvas, nodeEl);
-
-      if (node && typeof canvas.zoomToSelection === "function") {
-        try {
-          if (typeof canvas.selectOnly === "function") canvas.selectOnly(node);
-          else canvas.selection = new Set([node]);
-          canvas.zoomToSelection();
-          this.captureCurrentHorizontalPosition(canvas);
-          return;
-        } catch {}
-      }
-
-      if (node && typeof canvas.zoomToNode === "function") {
-        try {
-          canvas.zoomToNode(node);
-          this.captureCurrentHorizontalPosition(canvas);
-          return;
-        } catch {}
-      }
-
-      if (node?.x !== undefined && node?.y !== undefined && typeof canvas.setViewport === "function") {
-        try {
-          const viewport = canvas.viewport ?? canvas.viewPort ?? canvas;
-          const currentZoom = viewport.zoom ?? canvas.zoom ?? this.settings.targetZoom;
-          const zoom = this.settings.targetZoom || currentZoom || 1;
-
-          const x = Number(node.x);
-          const y = Number(node.y);
-          const width = Number(node.width ?? rect.width ?? 800);
-          const height = Number(node.height ?? rect.height ?? 500);
-
-          this.lastKnownX = -x + width / 2;
-          this.animateViewport(canvas, this.lastKnownX, -y + height / 2, zoom);
-          return;
-        } catch {}
-      }
-
-      if (node && typeof canvas.selectOnly === "function") {
-        try {
-          canvas.selectOnly(node);
-        } catch {}
-      }
+    const { x, y, width, height } = node ?? {};
+    if ([x, y, width, height].every((v: unknown) => typeof v === "number")) {
+      return { minX: x, minY: y, maxX: x + width, maxY: y + height };
     }
-
-    nodeEl.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+    return null;
   }
 
   private findNodeForElement(canvas: CanvasObject, nodeEl: HTMLElement): any | null {
@@ -411,13 +369,6 @@ export default class CanvasFlowPlugin extends Plugin {
       if (node?.nodeEl === nodeEl) return node;
     }
     return null;
-  }
-
-  private captureCurrentHorizontalPosition(canvas: CanvasObject) {
-    const currentX = this.readViewport(canvas).x ?? null;
-    if (typeof currentX === "number") {
-      this.lastKnownX = currentX;
-    }
   }
 
   private setFocusedNode(nodeEl: HTMLElement) {
@@ -542,56 +493,14 @@ class CanvasFlowSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Lock horizontal movement")
-      .setDesc("Attempts to make mouse wheel movement vertical-only while in CanvasFlow.")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.lockHorizontal)
-        .onChange(async value => {
-          this.plugin.settings.lockHorizontal = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("Allow zoom when horizontal is locked")
-      .setDesc("Pinch or Ctrl+scroll to zoom works normally even when horizontal movement is locked. After zooming, the locked horizontal position updates to match.")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.allowNativeZoomWhenLocked)
-        .onChange(async value => {
-          this.plugin.settings.allowNativeZoomWhenLocked = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("Reverse vertical scroll direction")
-      .setDesc("Matches CanvasFlow scrolling to native Canvas feel. Turn this off if the direction feels backwards on your device.")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.reverseVerticalScroll)
-        .onChange(async value => {
-          this.plugin.settings.reverseVerticalScroll = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("Vertical scroll speed")
-      .setDesc("Multiplier for wheel-based vertical movement.")
+      .setName("Focused card size")
+      .setDesc("How much of the screen a card fills when you click it in CanvasFlow mode. Small cards stop growing at 200% zoom.")
       .addSlider(slider => slider
-        .setLimits(0.25, 3, 0.25)
-        .setValue(this.plugin.settings.verticalScrollSpeed)
+        .setLimits(20, 90, 5)
+        .setValue(this.plugin.settings.focusSize)
         .setDynamicTooltip()
         .onChange(async value => {
-          this.plugin.settings.verticalScrollSpeed = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("Target zoom")
-      .setDesc("Preferred zoom level when focusing a card.")
-      .addSlider(slider => slider
-        .setLimits(0.5, 2, 0.1)
-        .setValue(this.plugin.settings.targetZoom)
-        .setDynamicTooltip()
-        .onChange(async value => {
-          this.plugin.settings.targetZoom = value;
+          this.plugin.settings.focusSize = value;
           await this.plugin.saveSettings();
         }));
 
@@ -622,16 +531,6 @@ class CanvasFlowSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.exitFocusOnEscape)
         .onChange(async value => {
           this.plugin.settings.exitFocusOnEscape = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("Background click exits focus")
-      .setDesc("Click the Canvas background to zoom back out one level.")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.exitFocusOnBackgroundClick)
-        .onChange(async value => {
-          this.plugin.settings.exitFocusOnBackgroundClick = value;
           await this.plugin.saveSettings();
         }));
   }

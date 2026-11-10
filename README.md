@@ -1,17 +1,14 @@
 # CanvasFlow - Obsidian Plugin
 
-CanvasFlow is an experimental Obsidian plugin that adds a focused, vertically scrollable dashboard/navigation mode for Canvas, plus text formatting for Canvas cards.
+CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that zooms to and centers the card you click, plus text formatting for Canvas cards.
 
-## Current MVP behavior
+## CanvasFlow mode
 
-- Toggle CanvasFlow on/off.
-- Click a Canvas card to focus it.
-- Scroll vertically while horizontal movement is locked.
-- Reverse vertical scroll direction from settings.
-- Press Escape or Backspace to zoom back out one level.
-- Click the Canvas background to zoom back out one level.
-- Use the floating "Back to canvas" button to return to the previous view.
-- Run diagnostics to inspect your local Obsidian Canvas internals.
+- Toggle CanvasFlow mode with the ribbon icon or the "Toggle CanvasFlow Mode" command.
+- Click a card to zoom in and center it, from any zoom level. Set how much of the screen it fills under "Focused card size" in settings.
+- Pan and zoom the canvas freely, the same as outside CanvasFlow mode. Dragging a card doesn't focus it.
+- Press Escape or Backspace, or use the floating "Back to canvas" button, to return to the previous view. Clicking the blank canvas does nothing.
+- Run "Show CanvasFlow diagnostics" to inspect your local Obsidian Canvas internals.
 
 ## Card text formatting
 
