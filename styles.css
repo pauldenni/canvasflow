@@ -42,3 +42,27 @@ body.canvasflow-enabled .canvas {
 .canvasflow-back-button:hover {
   background: var(--background-secondary);
 }
+/* ---------- Card text formatting ---------- */
+
+.canvas-node[data-canvasflow-align="center"] .canvas-node-content,
+.canvas-node[data-canvasflow-align="center"] .canvas-node-content .cm-content {
+  text-align: center;
+}
+
+.canvas-node[data-canvasflow-align="right"] .canvas-node-content,
+.canvas-node[data-canvasflow-align="right"] .canvas-node-content .cm-content {
+  text-align: right;
+}
+
+.canvas-node[data-canvasflow-bold] .canvas-node-content {
+  font-weight: var(--bold-weight, 700);
+}
+
+.canvas-node[data-canvasflow-italic] .canvas-node-content {
+  font-style: italic;
+}
+
+.canvas-menu .canvasflow-format-button.is-active {
+  color: var(--interactive-accent);
+  background-color: var(--background-modifier-hover);
+}

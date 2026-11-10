@@ -1,4 +1,5 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
+import { CardFormatting } from "./src/cardFormatting";
 
 interface CanvasFlowSettings {
   enabledByDefault: boolean;
@@ -12,6 +13,7 @@ interface CanvasFlowSettings {
   showBackButton: boolean;
   exitFocusOnEscape: boolean;
   exitFocusOnBackgroundClick: boolean;
+  showCardFormatting: boolean;
 }
 
 const DEFAULT_SETTINGS: CanvasFlowSettings = {
@@ -26,6 +28,7 @@ const DEFAULT_SETTINGS: CanvasFlowSettings = {
   showBackButton: true,
   exitFocusOnEscape: true,
   exitFocusOnBackgroundClick: true,
+  showCardFormatting: true,
 };
 
 type CanvasView = any;
@@ -33,6 +36,7 @@ type CanvasObject = any;
 
 export default class CanvasFlowPlugin extends Plugin {
   settings: CanvasFlowSettings;
+  cardFormatting: CardFormatting;
 
   private flowEnabled = false;
   private focusedNodeEl: HTMLElement | null = null;
@@ -45,6 +49,9 @@ export default class CanvasFlowPlugin extends Plugin {
     await this.loadSettings();
 
     this.addSettingTab(new CanvasFlowSettingTab(this.app, this));
+
+    this.cardFormatting = new CardFormatting(this, () => this.settings.showCardFormatting);
+    this.cardFormatting.load();
 
     this.addRibbonIcon("move-vertical", "Toggle CanvasFlow", () => {
       this.toggleFlowMode();
@@ -145,6 +152,9 @@ export default class CanvasFlowPlugin extends Plugin {
       return;
     }
 
+    // Clicks on Canvas chrome (the card action bar, zoom controls, popups) are not background clicks.
+    if (target.closest(".canvas-menu-container, .canvas-menu, .canvas-controls, .canvas-card-menu, .menu")) return;
+
     const nodeEl = target.closest(".canvas-node") as HTMLElement | null;
 
     if (!nodeEl) {
@@ -156,6 +166,7 @@ export default class CanvasFlowPlugin extends Plugin {
     }
 
     if (!this.settings.focusCardOnClick) return;
+    if (nodeEl === this.focusedNodeEl) return;
 
     this.setFocusedNode(nodeEl);
 
@@ -201,6 +212,9 @@ export default class CanvasFlowPlugin extends Plugin {
   private handleKeydown(evt: KeyboardEvent) {
     if (!this.flowEnabled || !this.settings.exitFocusOnEscape) return;
 
+    const target = evt.target as HTMLElement | null;
+    if (target?.closest("input, textarea, [contenteditable='true'], .cm-editor")) return;
+
     if ((evt.key === "Escape" || evt.key === "Backspace") && this.viewportStack.length > 0) {
       evt.preventDefault();
       evt.stopPropagation();
@@ -208,14 +222,24 @@ export default class CanvasFlowPlugin extends Plugin {
     }
   }
 
+  /**
+   * Obsidian's canvas animates toward a target viewport (tx, ty, tZoom); x, y
+   * and zoom are the in-between values. Read the target so we never save or
+   * restore a position from the middle of an animation.
+   */
+  private readViewport(canvas: CanvasObject): { x: number; y: number; zoom: number } {
+    return {
+      x: canvas.tx ?? canvas.x,
+      y: canvas.ty ?? canvas.y,
+      zoom: canvas.tZoom ?? canvas.zoom,
+    };
+  }
+
   private getCurrentViewport(): { x: number; y: number; zoom: number } | null {
     const canvas = this.getCanvasObject();
     if (!canvas) return null;
 
-    const viewport = canvas.viewport ?? canvas.viewPort ?? canvas;
-    const x = viewport.x ?? canvas.x;
-    const y = viewport.y ?? canvas.y;
-    const zoom = viewport.zoom ?? canvas.zoom;
+    const { x, y, zoom } = this.readViewport(canvas);
 
     if (typeof x === "number" && typeof y === "number" && typeof zoom === "number") {
       return { x, y, zoom };
@@ -238,9 +262,8 @@ export default class CanvasFlowPlugin extends Plugin {
     this.animateViewport(canvas, previous.x, previous.y, previous.zoom);
     this.lastKnownX = previous.x;
 
-    if (this.viewportStack.length === 0) {
-      this.clearFocusedNode();
-    }
+    // We've left that card's view, so clicking it again should focus it again.
+    this.clearFocusedNode();
 
     this.updateBackButton();
     this.updateStatusPill();
@@ -279,10 +302,10 @@ export default class CanvasFlowPlugin extends Plugin {
   }
 
   private panCanvasVertically(canvas: CanvasObject, deltaY: number) {
-    const viewport = canvas.viewport ?? canvas.viewPort ?? canvas;
-    const currentX = viewport.x ?? canvas.x ?? 0;
-    const currentY = viewport.y ?? canvas.y ?? 0;
-    const zoom = viewport.zoom ?? canvas.zoom ?? this.settings.targetZoom;
+    const target = this.readViewport(canvas);
+    const currentX = target.x ?? 0;
+    const currentY = target.y ?? 0;
+    const zoom = target.zoom ?? 0;
 
     if (this.lastKnownX === null) this.lastKnownX = currentX;
 
@@ -304,9 +327,9 @@ export default class CanvasFlowPlugin extends Plugin {
   private restoreHorizontalPosition(canvas: CanvasObject) {
     if (this.lastKnownX === null) return;
 
-    const viewport = canvas.viewport ?? canvas.viewPort ?? canvas;
-    const currentY = viewport.y ?? canvas.y ?? 0;
-    const zoom = viewport.zoom ?? canvas.zoom ?? this.settings.targetZoom;
+    const target = this.readViewport(canvas);
+    const currentY = target.y ?? 0;
+    const zoom = target.zoom ?? 0;
 
     if (typeof canvas.setViewport === "function") {
       canvas.setViewport(this.lastKnownX, currentY, zoom);
@@ -335,12 +358,12 @@ export default class CanvasFlowPlugin extends Plugin {
     const rect = nodeEl.getBoundingClientRect();
 
     if (canvas) {
-      const nodeId = nodeEl.getAttribute("data-node-id") ?? nodeEl.dataset.nodeId;
-      const node = nodeId && canvas.nodes instanceof Map ? canvas.nodes.get(nodeId) : null;
+      const node = this.findNodeForElement(canvas, nodeEl);
 
       if (node && typeof canvas.zoomToSelection === "function") {
         try {
-          canvas.selection = new Set([node]);
+          if (typeof canvas.selectOnly === "function") canvas.selectOnly(node);
+          else canvas.selection = new Set([node]);
           canvas.zoomToSelection();
           this.captureCurrentHorizontalPosition(canvas);
           return;
@@ -382,9 +405,16 @@ export default class CanvasFlowPlugin extends Plugin {
     nodeEl.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
   }
 
+  private findNodeForElement(canvas: CanvasObject, nodeEl: HTMLElement): any | null {
+    if (!(canvas.nodes instanceof Map)) return null;
+    for (const node of canvas.nodes.values()) {
+      if (node?.nodeEl === nodeEl) return node;
+    }
+    return null;
+  }
+
   private captureCurrentHorizontalPosition(canvas: CanvasObject) {
-    const viewport = canvas.viewport ?? canvas.viewPort ?? canvas;
-    const currentX = viewport.x ?? canvas.x ?? null;
+    const currentX = this.readViewport(canvas).x ?? null;
     if (typeof currentX === "number") {
       this.lastKnownX = currentX;
     }
@@ -479,6 +509,17 @@ class CanvasFlowSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     containerEl.createEl("h2", { text: "CanvasFlow" });
+
+    new Setting(containerEl)
+      .setName("Card text formatting")
+      .setDesc("Adds align, bold and italic buttons to the action bar when you select a text card. Works whether or not CanvasFlow mode is on.")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.showCardFormatting)
+        .onChange(async value => {
+          this.plugin.settings.showCardFormatting = value;
+          await this.plugin.saveSettings();
+          this.plugin.cardFormatting.refreshAll();
+        }));
 
     new Setting(containerEl)
       .setName("Enable by default")
