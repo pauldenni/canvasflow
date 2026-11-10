@@ -1,9 +1,3 @@
-body.canvasflow-enabled .canvasflow-active-node {
-  outline: 3px solid var(--interactive-accent);
-  outline-offset: 4px;
-  border-radius: 8px;
-}
-
 body.canvasflow-enabled .canvas-wrapper,
 body.canvasflow-enabled .canvas {
   overscroll-behavior: contain;
@@ -65,4 +59,22 @@ body.canvasflow-enabled .canvas {
 .canvas-menu .canvasflow-format-button.is-active {
   color: var(--interactive-accent);
   background-color: var(--background-modifier-hover);
+}
+
+/* ---------- Locked cards ---------- */
+
+/* A heavier bottom edge, in the card's own border color. */
+.canvas-node[data-canvasflow-locked] > .canvas-node-container {
+  border-bottom-width: 3px;
+}
+
+/* No grab cursor or resize handles on locked cards (text editing still works). */
+.canvas-wrapper .canvas-node[data-canvasflow-locked]:not(.is-editing) .canvas-node-container,
+.canvas-wrapper .canvas-node[data-canvasflow-locked]:not(.is-editing) .canvas-node-container:active {
+  cursor: default;
+}
+
+.canvas-node[data-canvasflow-locked] .canvas-node-resizer,
+.canvas-wrapper.canvasflow-selection-locked .canvas-node-resizer {
+  display: none;
 }

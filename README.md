@@ -21,6 +21,16 @@ Formatting applies to text cards only (not notes, images or links) and works whe
 
 You can turn the buttons off in settings under "Card text formatting".
 
+## Locking cards
+
+Select any card (text, note, image, link or group) and click the lock button in its action bar. A locked card:
+
+- can't be moved, resized or deleted, including by arrow keys, Cut or the Delete key
+- still lets you edit its text
+- has a slightly heavier bottom edge, so you can tell at a glance which cards are locked
+
+Dragging a selection that includes locked cards moves only the unlocked ones. Click the lock button again to unlock. Undo and redo work as usual. Like formatting, the lock is saved in the `.canvas` file (`canvasflowLocked`).
+
 ## Install for local testing
 
 1. Place the `canvasflow` folder here:

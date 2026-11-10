@@ -1,5 +1,5 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { CardFormatting } from "./src/cardFormatting";
+import { CardTools } from "./src/cardTools";
 
 interface CanvasFlowSettings {
   enabledByDefault: boolean;
@@ -36,7 +36,7 @@ const DRAG_THRESHOLD_PX = 5;
 
 export default class CanvasFlowPlugin extends Plugin {
   settings: CanvasFlowSettings;
-  cardFormatting: CardFormatting;
+  cardTools: CardTools;
 
   private flowEnabled = false;
   private focusedNodeEl: HTMLElement | null = null;
@@ -51,8 +51,8 @@ export default class CanvasFlowPlugin extends Plugin {
 
     this.addSettingTab(new CanvasFlowSettingTab(this.app, this));
 
-    this.cardFormatting = new CardFormatting(this, () => this.settings.showCardFormatting);
-    this.cardFormatting.load();
+    this.cardTools = new CardTools(this, () => this.settings.showCardFormatting);
+    this.cardTools.load();
 
     this.addRibbonIcon("focus", "Toggle CanvasFlow", () => {
       this.toggleFlowMode();
@@ -374,12 +374,10 @@ export default class CanvasFlowPlugin extends Plugin {
   private setFocusedNode(nodeEl: HTMLElement) {
     this.clearFocusedNode();
     this.focusedNodeEl = nodeEl;
-    this.focusedNodeEl.classList.add("canvasflow-active-node");
     this.updateStatusPill();
   }
 
   private clearFocusedNode() {
-    this.focusedNodeEl?.classList.remove("canvasflow-active-node");
     this.focusedNodeEl = null;
   }
 
@@ -463,13 +461,13 @@ class CanvasFlowSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Card text formatting")
-      .setDesc("Adds align, bold and italic buttons to the action bar when you select a text card. Works whether or not CanvasFlow mode is on.")
+      .setDesc("Adds align, bold and italic buttons to the action bar when you select a text card. Works whether or not CanvasFlow mode is on. The lock button is always shown.")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.showCardFormatting)
         .onChange(async value => {
           this.plugin.settings.showCardFormatting = value;
           await this.plugin.saveSettings();
-          this.plugin.cardFormatting.refreshAll();
+          this.plugin.cardTools.refreshAll();
         }));
 
     new Setting(containerEl)
