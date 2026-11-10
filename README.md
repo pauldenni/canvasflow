@@ -1,6 +1,6 @@
 # CanvasFlow - Obsidian Plugin
 
-CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that zooms to and centers the card you click, plus text formatting for Canvas cards.
+CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that zooms to and centers the card you click, plus card formatting (align, bold and italic) and card locking.
 
 ## CanvasFlow mode
 
