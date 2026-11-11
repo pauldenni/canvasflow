@@ -38,13 +38,11 @@ body.canvasflow-enabled .canvas {
 }
 /* ---------- Card text formatting ---------- */
 
-.canvas-node[data-canvasflow-align="center"] .canvas-node-content,
-.canvas-node[data-canvasflow-align="center"] .canvas-node-content .cm-content {
+.canvas-node[data-canvasflow-align="center"] .canvas-node-content {
   text-align: center;
 }
 
-.canvas-node[data-canvasflow-align="right"] .canvas-node-content,
-.canvas-node[data-canvasflow-align="right"] .canvas-node-content .cm-content {
+.canvas-node[data-canvasflow-align="right"] .canvas-node-content {
   text-align: right;
 }
 
@@ -56,6 +54,28 @@ body.canvasflow-enabled .canvas {
   font-style: italic;
 }
 
+/*
+ * While you type, Obsidian shows a card's text in an iframe. CanvasFlow copies
+ * the card's formatting onto that iframe's <body>, so these match there.
+ */
+body[data-canvasflow-align="center"] .cm-content,
+body[data-canvasflow-align="center"] .cm-line {
+  text-align: center;
+}
+
+body[data-canvasflow-align="right"] .cm-content,
+body[data-canvasflow-align="right"] .cm-line {
+  text-align: right;
+}
+
+body[data-canvasflow-bold] .cm-content {
+  font-weight: var(--bold-weight, 700);
+}
+
+body[data-canvasflow-italic] .cm-content {
+  font-style: italic;
+}
+
 .canvas-menu .canvasflow-format-button.is-active {
   color: var(--interactive-accent);
   background-color: var(--background-modifier-hover);
@@ -64,7 +84,7 @@ body.canvasflow-enabled .canvas {
 /* ---------- Locked cards ---------- */
 
 /* A heavier bottom edge, in the card's own border color. */
-.canvas-node[data-canvasflow-locked] > .canvas-node-container {
+.canvas-node[data-canvasflow-locked]:not([data-canvasflow-shape]) > .canvas-node-container {
   border-bottom-width: 3px;
 }
 
@@ -77,4 +97,192 @@ body.canvasflow-enabled .canvas {
 .canvas-node[data-canvasflow-locked] .canvas-node-resizer,
 .canvas-wrapper.canvasflow-selection-locked .canvas-node-resizer {
   display: none;
+}
+
+/* ---------- Shapes ---------- */
+
+/* The card box becomes invisible; the shape outline is drawn behind the text. */
+.canvas-node[data-canvasflow-shape] > .canvas-node-container {
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible;
+  contain: layout style size;
+}
+
+.canvas-node[data-canvasflow-shape] .canvas-node-content {
+  background-color: transparent !important;
+  box-sizing: border-box;
+  padding:
+    var(--canvasflow-inset-top, 0)
+    var(--canvasflow-inset-right, 0)
+    var(--canvasflow-inset-bottom, 0)
+    var(--canvasflow-inset-left, 0);
+}
+
+svg.canvasflow-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+svg.canvasflow-shape path {
+  stroke: var(--canvas-color);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+svg.canvasflow-shape .canvasflow-shape-outline {
+  fill: var(--background-primary);
+}
+
+svg.canvasflow-shape .canvasflow-shape-outline.is-open,
+svg.canvasflow-shape .canvasflow-shape-lines {
+  fill: none;
+}
+
+/* Colored cards: same tint as the canvas's own colored cards. */
+.canvas-node.is-themed svg.canvasflow-shape path {
+  stroke: color-mix(in oklch, var(--canvas-color) 70%, transparent);
+}
+
+.canvas-node.is-themed svg.canvasflow-shape .canvasflow-shape-outline:not(.is-open) {
+  fill: color-mix(in oklch, var(--canvas-color) 7%, var(--background-primary));
+}
+
+/* Selected: the outline takes the accent color, with a light box showing the resize area. */
+.canvas-node[data-canvasflow-shape]:is(.is-selected, .is-focused) svg.canvasflow-shape path {
+  stroke: var(--color-accent);
+}
+
+.canvas-node.is-themed[data-canvasflow-shape]:is(.is-selected, .is-focused) svg.canvasflow-shape path {
+  stroke: var(--canvas-color);
+}
+
+.canvas-node[data-canvasflow-shape]:is(.is-selected, .is-focused) > .canvas-node-container {
+  outline: 1px dashed color-mix(in oklch, var(--color-accent) 60%, transparent);
+  outline-offset: 3px;
+}
+
+.canvas-node[data-canvasflow-shape].is-dragging svg.canvasflow-shape {
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
+}
+
+/* Locked shapes: a heavier outline (the shape version of the heavier bottom edge). */
+.canvas-node[data-canvasflow-shape][data-canvasflow-locked] svg.canvasflow-shape path {
+  stroke-width: 3.5;
+}
+
+/* Labels sit in the middle of the shape. */
+.canvas-node[data-canvasflow-shape] .canvas-node-content.markdown-embed > .markdown-embed-content > .markdown-preview-view {
+  padding: 0 6px;
+}
+
+.canvas-node[data-canvasflow-shape] .canvas-node-content.markdown-embed > .markdown-embed-content > .markdown-preview-view::before,
+.canvas-node[data-canvasflow-shape] .canvas-node-content.markdown-embed > .markdown-embed-content > .markdown-preview-view::after {
+  max-height: none;
+}
+
+.canvas-node[data-canvasflow-shape] .canvas-node-content.markdown-embed > .markdown-embed-content > .markdown-preview-view > .markdown-preview-sizer {
+  flex: 0 0 auto;
+}
+
+/* Typing in a shape: no editor box, and the text stays in the middle like the label. */
+html:has(> body[data-canvasflow-shape]),
+body[data-canvasflow-shape],
+body[data-canvasflow-shape] .markdown-embed-content,
+body[data-canvasflow-shape] .markdown-source-view,
+body[data-canvasflow-shape] .cm-editor,
+body[data-canvasflow-shape] .cm-scroller {
+  background-color: transparent !important;
+}
+
+html:has(> body[data-canvasflow-shape]),
+body[data-canvasflow-shape] {
+  height: 100%;
+}
+
+/* Match the iframe element's color scheme so Chrome keeps the iframe see-through. */
+html:has(> body[data-canvasflow-shape]) {
+  color-scheme: normal;
+}
+
+body[data-canvasflow-shape] .markdown-source-view.mod-inside-iframe > .cm-editor > .cm-scroller {
+  padding: 0 6px;
+}
+
+body[data-canvasflow-shape] .markdown-source-view.mod-inside-iframe > .cm-editor > .cm-scroller::before,
+body[data-canvasflow-shape] .markdown-source-view.mod-inside-iframe > .cm-editor > .cm-scroller::after {
+  max-height: none;
+}
+
+body[data-canvasflow-shape] .markdown-source-view.mod-inside-iframe > .cm-editor > .cm-scroller > .cm-sizer {
+  flex: 0 0 auto;
+}
+
+/* ---------- Shape picker ---------- */
+
+.canvas-card-menu .canvasflow-shape-add.is-active {
+  color: var(--color-accent);
+}
+
+.canvasflow-shape-picker {
+  position: fixed;
+  z-index: var(--layer-menu);
+  padding: 6px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-primary);
+  box-shadow: var(--shadow-s);
+}
+
+.theme-dark .canvasflow-shape-picker {
+  background-color: var(--background-secondary);
+}
+
+.canvasflow-shape-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 40px);
+  gap: 2px;
+}
+
+.canvasflow-shape-picker-item {
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.canvasflow-shape-picker-item.is-active,
+.canvasflow-shape-picker-card.is-active {
+  color: var(--color-accent);
+  background-color: var(--background-modifier-hover);
+}
+
+.canvasflow-shape-icon {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.canvasflow-shape-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.canvasflow-shape-picker-card {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  font-size: var(--font-ui-small);
 }

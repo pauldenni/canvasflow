@@ -461,7 +461,7 @@ class CanvasFlowSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Card text formatting")
-      .setDesc("Adds align, bold and italic buttons to the action bar when you select a text card. Works whether or not CanvasFlow mode is on. The lock button is always shown.")
+      .setDesc("Adds align, bold, italic and shape buttons to the action bar when you select a text card. Works whether or not CanvasFlow mode is on. The lock button and the Add shape button at the bottom of the canvas are always shown.")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.showCardFormatting)
         .onChange(async value => {

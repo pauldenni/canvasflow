@@ -1,6 +1,6 @@
 # CanvasFlow - Obsidian Plugin
 
-CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that zooms to and centers the card you click, plus card formatting (align, bold and italic) and card locking.
+CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that zooms to and centers the card you click, plus shapes, card formatting (align, bold and italic) and card locking.
 
 ## CanvasFlow mode
 
@@ -21,13 +21,23 @@ Formatting applies to text cards only (not notes, images or links) and works whe
 
 You can turn the buttons off in settings under "Card text formatting".
 
+## Shapes
+
+Click the **Add shape** button in the bar at the bottom of the canvas, next to the add card, note and media buttons, then pick one of 16 shapes:
+
+rectangle, circle, diamond, triangle, rounded rectangle, cloud, star, arrow, parallelogram, hexagon, octagon, double arrow, speech bubble, cylinder, predefined process and brace note.
+
+Click a shape to add it in the middle of the view, or drag it to where you want it. Then type its label, just like a standard card. Labels are centered unless you change the alignment, stay inside the shape (also while you type) and the outline redraws to fit when you resize it.
+
+A shape is a text card underneath, so labels, colors, formatting, locking, connections and CanvasFlow focus all work as usual. To change a card's shape, or turn it back into a standard card, select it and use the **Shape** button in its action bar. The shape is saved in the `.canvas` file (`canvasflowShape`); other apps show a plain text card.
+
 ## Locking cards
 
 Select any card (text, note, image, link or group) and click the lock button in its action bar. A locked card:
 
 - can't be moved, resized or deleted, including by arrow keys, Cut or the Delete key
 - still lets you edit its text
-- has a slightly heavier bottom edge, so you can tell at a glance which cards are locked
+- has a slightly heavier bottom edge (shapes get a slightly heavier outline), so you can tell at a glance which cards are locked
 
 Dragging a selection that includes locked cards moves only the unlocked ones. Click the lock button again to unlock. Undo and redo work as usual. Like formatting, the lock is saved in the `.canvas` file (`canvasflowLocked`).
 

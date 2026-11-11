@@ -1,4 +1,5 @@
 import { Menu, Notice, Plugin, setIcon, setTooltip } from "obsidian";
+import { SHAPES, SHAPES_BY_ID, ShapeDef, buildShapeIcon, buildShapeSvg, drawShape } from "./shapeGeometry";
 
 /**
  * Extra tools in the Obsidian Canvas card action bar:
@@ -7,6 +8,9 @@ import { Menu, Notice, Plugin, setIcon, setTooltip } from "obsidian";
  *   under `canvasflowText`.
  * - Lock (any card): a locked card can't be moved, resized or deleted, but
  *   its text stays editable. Stored on the node as `canvasflowLocked: true`.
+ * - Shapes (text cards): a "Shapes" button next to the canvas's own add-card
+ *   buttons adds a text card drawn as a shape; the action bar can change a
+ *   text card's shape. Stored on the node as `canvasflowShape: "<id>"`.
  *
  * Both live in the .canvas JSON (the canvas spec allows extra keys on nodes),
  * so they survive reloads, copy/paste and undo/redo. They're rendered by
@@ -29,6 +33,13 @@ const TEXT_KEY = "canvasflowText";
 const LOCK_KEY = "canvasflowLocked";
 const BUTTON_CLASS = "canvasflow-format-button";
 const SELECTION_LOCKED_CLASS = "canvasflow-selection-locked";
+const SHAPE_KEY = "canvasflowShape";
+const SHAPE_SVG_CLASS = "canvasflow-shape";
+const SHAPE_ADD_BUTTON_CLASS = "canvasflow-shape-add";
+const PICKER_CLASS = "canvasflow-shape-picker";
+/** Per-node caches, stored on the node object. */
+const NODE_SHAPE = "__canvasflowShape";
+const NODE_SHAPE_KEY = "__canvasflowShapeKey";
 const NOTICE_THROTTLE_MS = 1500;
 
 type AnyObj = any;
@@ -43,10 +54,12 @@ export class CardTools {
    */
   private systemChange = 0;
   private lastNoticeAt = 0;
+  private closePicker: (() => void) | null = null;
 
   constructor(private plugin: Plugin, private formattingEnabled: () => boolean) {}
 
   load() {
+    this.plugin.register(() => this.closePicker?.());
     const { workspace } = this.plugin.app;
     const sweep = () => this.attachToOpenCanvases();
     workspace.onLayoutReady(sweep);
@@ -127,6 +140,8 @@ export class CardTools {
       });
       try { menu.render?.(); } catch {}
     }
+
+    this.addShapeButton(canvas);
   }
 
   /** Patch the node's class once (per card type) and apply its current styling. */
@@ -146,6 +161,22 @@ export class CardTools {
     this.patchProto(proto, "moveAndResize", orig => function (this: AnyObj, ...args: any[]) {
       if (self.systemChange === 0 && self.isLocked(this)) return;
       return orig.apply(this, args);
+    });
+
+    // Shapes are drawn for the card's size, so redraw when it changes.
+    this.patchProto(proto, "render", orig => function (this: AnyObj, ...args: any[]) {
+      const result = orig.apply(this, args);
+      if (this[NODE_SHAPE] || this[NODE_SHAPE_KEY]) {
+        try { self.renderShape(this); } catch (err) { console.error("[CanvasFlow] shape", err); }
+      }
+      return result;
+    });
+
+    // Editing opens the text in an iframe; carry the card's formatting into it.
+    this.patchProto(proto, "startEditing", orig => function (this: AnyObj, ...args: any[]) {
+      const result = orig.apply(this, args);
+      try { self.syncEditorSoon(this); } catch {}
+      return result;
     });
 
     // "Convert to file" replaces the card with a new file card; let it remove the old one.
@@ -224,8 +255,15 @@ export class CardTools {
     return this.getData(node)?.[LOCK_KEY] === true;
   }
 
+  /** Shapes are centered unless you choose otherwise; standard cards are left-aligned. */
+  private defaultAlign(node: AnyObj): TextAlign {
+    return this.getShape(node) ? "center" : "left";
+  }
+
+  /** The card's text style, with its alignment always filled in. */
   private getStyle(node: AnyObj): CardTextStyle {
-    return { ...(this.getData(node)?.[TEXT_KEY] ?? {}) };
+    const stored: CardTextStyle = { ...(this.getData(node)?.[TEXT_KEY] ?? {}) };
+    return { ...stored, align: stored.align ?? this.defaultAlign(node) };
   }
 
   /** Write extra keys onto a node's data; `undefined` removes a key. */
@@ -241,7 +279,7 @@ export class CardTools {
 
   private setStyle(node: AnyObj, style: CardTextStyle) {
     const clean: CardTextStyle = {};
-    if (style.align && style.align !== "left") clean.align = style.align;
+    if (style.align && style.align !== this.defaultAlign(node)) clean.align = style.align;
     if (style.bold) clean.bold = true;
     if (style.italic) clean.italic = true;
     this.updateData(node, { [TEXT_KEY]: Object.keys(clean).length ? clean : undefined });
@@ -255,16 +293,118 @@ export class CardTools {
     const el: HTMLElement | undefined = node?.nodeEl;
     if (!el) return;
 
+    const shape = this.getShape(node);
     const style = this.isTextNode(node) ? this.getStyle(node) : {};
-    const toggle = (attr: string, value: string | null) => {
-      if (value === null) el.removeAttribute(attr);
-      else el.setAttribute(attr, value);
-    };
+    const attrs = this.styleAttributes(shape, style);
+    attrs["data-canvasflow-locked"] = this.isLocked(node) ? "true" : null;
+    this.setAttributes(el, attrs);
 
-    toggle("data-canvasflow-align", style.align && style.align !== "left" ? style.align : null);
-    toggle("data-canvasflow-bold", style.bold ? "true" : null);
-    toggle("data-canvasflow-italic", style.italic ? "true" : null);
-    toggle("data-canvasflow-locked", this.isLocked(node) ? "true" : null);
+    node[NODE_SHAPE] = shape?.id;
+    this.renderShape(node);
+    this.syncEditor(node);
+  }
+
+  /** Attributes styles.css uses for a card's text, on the card and inside its editor. */
+  private styleAttributes(shape: ShapeDef | undefined, style: CardTextStyle): Record<string, string | null> {
+    return {
+      "data-canvasflow-shape": shape ? shape.id : null,
+      "data-canvasflow-align": style.align && style.align !== "left" ? style.align : null,
+      "data-canvasflow-bold": style.bold ? "true" : null,
+      "data-canvasflow-italic": style.italic ? "true" : null,
+    };
+  }
+
+  private setAttributes(el: Element, attrs: Record<string, string | null>) {
+    for (const [attr, value] of Object.entries(attrs)) {
+      if (value === null) el.removeAttribute(attr);
+      else if (el.getAttribute(attr) !== value) el.setAttribute(attr, value);
+    }
+  }
+
+  /**
+   * Canvas text cards are edited in an iframe, so styles keyed to the card
+   * element never reach the editor. Mirror the card's shape and formatting
+   * onto the iframe's <body>, which Obsidian leaves alone (it only syncs the
+   * body's classes and the stylesheets, including this plugin's).
+   */
+  private syncEditor(node: AnyObj): boolean {
+    if (!this.isTextNode(node)) return false;
+    const editMode = node.child?.editMode;
+    if (editMode) this.watchEditor(editMode);
+
+    const iframe: HTMLIFrameElement | null =
+      editMode?.iframeEl ?? node.contentEl?.querySelector?.("iframe.embed-iframe") ?? null;
+    const body = iframe?.contentDocument?.body;
+    if (!body) return false;
+
+    this.setAttributes(body, this.styleAttributes(this.getShape(node), this.getStyle(node)));
+    return true;
+  }
+
+  /** Re-sync when Obsidian reloads a card's editor iframe (it does when the card is re-attached). */
+  private watchEditor(editMode: AnyObj) {
+    const self = this;
+    this.patchProto(Object.getPrototypeOf(editMode), "onIframeLoad", orig => function (this: AnyObj, ...args: any[]) {
+      const result = orig.apply(this, args);
+      const node = this.owner?.node;
+      if (node) {
+        try { self.syncEditor(node); } catch {}
+      }
+      return result;
+    });
+  }
+
+  /** After editing starts, keep syncing until the editor iframe is ready. */
+  private syncEditorSoon(node: AnyObj) {
+    if (!this.isTextNode(node)) return;
+    const win = node?.nodeEl?.win ?? window;
+    let frames = 0;
+    const tick = () => {
+      const ready = this.syncEditor(node) && !!node.child?.editMode?.iframeEl?.contentDocument?.querySelector?.(".cm-editor");
+      if (!ready && ++frames < 30) win.requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  private getShape(node: AnyObj): ShapeDef | undefined {
+    if (!this.isTextNode(node)) return undefined;
+    const id = this.getData(node)?.[SHAPE_KEY];
+    return typeof id === "string" ? SHAPES_BY_ID.get(id) : undefined;
+  }
+
+  /** Draw (or remove) the shape outline behind a card's text. */
+  private renderShape(node: AnyObj) {
+    const el: HTMLElement | undefined = node?.nodeEl;
+    const container: HTMLElement | undefined = node?.containerEl;
+    if (!el) return;
+
+    const existing = container?.querySelector<SVGSVGElement>(`:scope > svg.${SHAPE_SVG_CLASS}`) ?? null;
+    const shape: ShapeDef | undefined = node[NODE_SHAPE] ? SHAPES_BY_ID.get(node[NODE_SHAPE]) : undefined;
+
+    if (!shape) {
+      existing?.remove();
+      node[NODE_SHAPE_KEY] = undefined;
+      for (const side of ["top", "right", "bottom", "left"]) el.style.removeProperty(`--canvasflow-inset-${side}`);
+      return;
+    }
+    // The container is created on the card's first render; the render patch catches that.
+    if (!container) return;
+
+    const width = Math.max(1, Number(node.width) || 0);
+    const height = Math.max(1, Number(node.height) || 0);
+    const key = `${shape.id}:${width}x${height}`;
+    if (existing && node[NODE_SHAPE_KEY] === key) return;
+
+    const svg = buildShapeSvg(shape, width, height, SHAPE_SVG_CLASS);
+    if (existing) existing.replaceWith(svg);
+    else container.prepend(svg);
+    node[NODE_SHAPE_KEY] = key;
+
+    const [top, right, bottom, left] = drawShape(shape, width, height).insets;
+    el.style.setProperty("--canvasflow-inset-top", `${Math.round(top)}px`);
+    el.style.setProperty("--canvasflow-inset-right", `${Math.round(right)}px`);
+    el.style.setProperty("--canvasflow-inset-bottom", `${Math.round(bottom)}px`);
+    el.style.setProperty("--canvasflow-inset-left", `${Math.round(left)}px`);
   }
 
   private getSelectedCards(canvas: AnyObj): AnyObj[] {
@@ -362,6 +502,177 @@ export class CardTools {
       updateText(s => ({ ...s, italic: !allItalic }));
     });
     insert(italicButton);
+
+    const shapes = textNodes.map(n => this.getShape(n)?.id ?? null);
+    const current = shapes.every(id => id === shapes[0]) ? shapes[0] : undefined;
+    const shapeButton = this.makeButton("shapes", many ? "Change shapes" : "Change shape", current != null);
+    shapeButton.addEventListener("click", evt => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      this.openShapePicker(shapeButton, "below", {
+        current,
+        includeCard: true,
+        onPick: id => this.commit(canvas, textNodes, node => this.setShape(node, id)),
+      });
+    });
+    insert(shapeButton);
+  }
+
+  // ---------- shapes ----------
+
+  private setShape(node: AnyObj, id: string | null) {
+    this.updateData(node, { [SHAPE_KEY]: id ?? undefined });
+  }
+
+  /** The "Shapes" button in the bar at the bottom of the canvas. */
+  private addShapeButton(canvas: AnyObj) {
+    const bar: HTMLElement | undefined = canvas.cardMenuEl ?? canvas.wrapperEl?.querySelector?.(".canvas-card-menu");
+    if (!bar || bar.querySelector(`.${SHAPE_ADD_BUTTON_CLASS}`)) return;
+
+    const button = document.createElement("div");
+    button.className = `canvas-card-menu-button ${SHAPE_ADD_BUTTON_CLASS}`;
+    button.setAttribute("aria-label", "Add shape");
+    setIcon(button, "shapes");
+    setTooltip(button, "Add shape", { placement: "top" });
+    button.addEventListener("click", evt => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      if (button.hasClass("is-active")) {
+        this.closePicker?.();
+        return;
+      }
+      button.addClass("is-active");
+      this.openShapePicker(button, "above", {
+        includeCard: false,
+        onPick: id => {
+          const shape = id ? SHAPES_BY_ID.get(id) : undefined;
+          if (shape) this.createShape(canvas, shape);
+        },
+        onDrag: (evt, shape) => this.dragShape(canvas, evt, shape),
+        onClose: () => button.removeClass("is-active"),
+      });
+    });
+    bar.appendChild(button);
+    this.plugin.register(() => button.remove());
+  }
+
+  /** Add a shape card, at the viewport center or at a dropped position (top-left). */
+  private createShape(canvas: AnyObj, shape: ShapeDef, topLeft?: { x: number; y: number }) {
+    if (canvas.readonly || typeof canvas.createTextNode !== "function") return;
+    const node = canvas.createTextNode({
+      pos: topLeft ?? canvas.posCenter(),
+      position: topLeft ? undefined : "center",
+      size: { ...shape.size },
+      save: false,
+      focus: false,
+    });
+    if (!node) return;
+    this.watchNode(node);
+    this.updateData(node, { [SHAPE_KEY]: shape.id });
+    try { canvas.requestSave?.(); } catch {}
+
+    // Same as a new standard card: select it and start typing the label.
+    try {
+      node.attach?.();
+      node.render?.();
+      canvas.selectOnly?.(node);
+      node.startEditing?.();
+    } catch {}
+  }
+
+  /** Drag a shape out of the picker onto the canvas, like the native add-card button. */
+  private dragShape(canvas: AnyObj, evt: PointerEvent, shape: ShapeDef) {
+    if (canvas.readonly || typeof canvas.dragTempNode !== "function") return;
+    canvas.dragTempNode(evt, { ...shape.size }, (pos: { x: number; y: number }) => {
+      this.closePicker?.();
+      try { canvas.deselectAll?.(); } catch {}
+      this.createShape(canvas, shape, pos);
+    });
+  }
+
+  private openShapePicker(
+    anchor: HTMLElement,
+    placement: "above" | "below",
+    options: {
+      current?: string | null;
+      includeCard: boolean;
+      onPick: (id: string | null) => void;
+      onDrag?: (evt: PointerEvent, shape: ShapeDef) => void;
+      onClose?: () => void;
+    },
+  ) {
+    this.closePicker?.();
+
+    const doc = anchor.ownerDocument;
+    const win = doc.defaultView ?? window;
+    const picker = doc.body.createDiv(PICKER_CLASS);
+    const grid = picker.createDiv(`${PICKER_CLASS}-grid`);
+
+    const close = () => {
+      if (this.closePicker !== close) return;
+      this.closePicker = null;
+      picker.remove();
+      doc.removeEventListener("pointerdown", onOutside, true);
+      doc.removeEventListener("keydown", onKey, true);
+      win.removeEventListener("resize", close);
+      options.onClose?.();
+    };
+    const onOutside = (evt: PointerEvent) => {
+      const target = evt.target as Node | null;
+      if (target && (picker.contains(target) || anchor.contains(target))) return;
+      close();
+    };
+    const onKey = (evt: KeyboardEvent) => {
+      if (evt.key !== "Escape") return;
+      evt.preventDefault();
+      evt.stopPropagation();
+      close();
+    };
+
+    for (const shape of SHAPES) {
+      const item = grid.createEl("button", { cls: `clickable-icon ${PICKER_CLASS}-item` });
+      item.type = "button";
+      item.setAttribute("aria-label", shape.label);
+      setTooltip(item, shape.label, { placement: placement === "above" ? "top" : "bottom" });
+      item.appendChild(buildShapeIcon(shape));
+      if (options.current === shape.id) item.addClass("is-active");
+      item.addEventListener("click", evt => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        close();
+        options.onPick(shape.id);
+      });
+      if (options.onDrag) {
+        const onDrag = options.onDrag;
+        item.addEventListener("pointerdown", evt => onDrag(evt, shape));
+      }
+    }
+
+    if (options.includeCard) {
+      const card = picker.createEl("button", { cls: `${PICKER_CLASS}-card`, text: "Standard card" });
+      card.type = "button";
+      if (options.current === null) card.addClass("is-active");
+      card.addEventListener("click", evt => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        close();
+        options.onPick(null);
+      });
+    }
+
+    // Position next to the anchor, kept on screen.
+    const rect = anchor.getBoundingClientRect();
+    const box = picker.getBoundingClientRect();
+    const margin = 8;
+    const left = Math.min(Math.max(margin, rect.left + rect.width / 2 - box.width / 2), win.innerWidth - box.width - margin);
+    const top = placement === "above" ? rect.top - box.height - margin : rect.bottom + margin;
+    picker.style.left = `${Math.round(left)}px`;
+    picker.style.top = `${Math.round(Math.max(margin, top))}px`;
+
+    doc.addEventListener("pointerdown", onOutside, true);
+    doc.addEventListener("keydown", onKey, true);
+    win.addEventListener("resize", close);
+    this.closePicker = close;
   }
 
   private makeButton(icon: string, label: string, active = false): HTMLButtonElement {
