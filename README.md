@@ -49,6 +49,7 @@ Select any card (text, note, image, link or group) and click the lock button in 
 - can't be moved, resized or deleted, including by arrow keys, Cut or the Delete key
 - still lets you edit its text
 - has a slightly heavier bottom edge (shapes get a slightly heavier outline), so you can tell at a glance which cards are locked
+- turns red instead of the accent color when selected, so a box selection shows which cards won't move
 
 Dragging a selection that includes locked cards moves only the unlocked ones. Click the lock button again to unlock. Undo and redo work as usual. Like formatting, the lock is saved in the `.canvas` file (`canvasflowLocked`).
 

@@ -89,6 +89,16 @@ body[data-canvasflow-italic] .cm-content {
   border-bottom-width: 3px;
 }
 
+/* Selected or focused locked cards trade the accent color for red, so you can see what won't move. */
+body {
+  --canvasflow-locked-color: var(--color-red);
+}
+
+.canvas-node[data-canvasflow-locked]:not([data-canvasflow-shape]):is(.is-selected, .is-focused) > .canvas-node-container {
+  border-color: var(--canvasflow-locked-color);
+  box-shadow: var(--shadow-stationary), 0 0 0 2px var(--canvasflow-locked-color);
+}
+
 /* No grab cursor or resize handles on locked cards (text editing still works). */
 .canvas-wrapper .canvas-node[data-canvasflow-locked]:not(.is-editing) .canvas-node-container,
 .canvas-wrapper .canvas-node[data-canvasflow-locked]:not(.is-editing) .canvas-node-container:active {
@@ -174,6 +184,15 @@ svg.canvasflow-shape .canvasflow-shape-lines {
 .canvas-node[data-canvasflow-shape]:is(.is-selected, .is-focused) > .canvas-node-container {
   outline: 1px dashed color-mix(in oklch, var(--color-accent) 60%, transparent);
   outline-offset: 3px;
+}
+
+/* Locked shapes, selected: red outline and resize box instead of the accent color. */
+.canvas-node[data-canvasflow-shape][data-canvasflow-locked]:is(.is-selected, .is-focused) svg.canvasflow-shape path {
+  stroke: var(--canvasflow-locked-color);
+}
+
+.canvas-node[data-canvasflow-shape][data-canvasflow-locked]:is(.is-selected, .is-focused) > .canvas-node-container {
+  outline-color: color-mix(in oklch, var(--canvasflow-locked-color) 60%, transparent);
 }
 
 .canvas-node[data-canvasflow-shape].is-dragging svg.canvasflow-shape {
