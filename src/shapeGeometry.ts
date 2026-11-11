@@ -37,10 +37,19 @@ export interface ShapeDef {
 export interface Box {
   x0: number; y0: number; x1: number; y1: number;
   w: number; h: number; cx: number; cy: number;
+  /** Size of one canvas pixel in this drawing: 1 on the canvas, smaller for picker icons. */
+  scale: number;
 }
 
 /** Stroke width in canvas units; the outline is inset by half of it. */
-export const SHAPE_STROKE = 2;
+export const SHAPE_STROKE = 1;
+
+/**
+ * Obsidian's card corner radius (--radius-m, 8px). The outline runs down the
+ * middle of the stroke, so its radius is half a stroke smaller to make the
+ * outer edge match a card's.
+ */
+const CARD_RADIUS = 8 - SHAPE_STROKE / 2;
 
 const n = (v: number) => (Math.round(v * 100) / 100).toString();
 const pt = (x: number, y: number) => `${n(x)} ${n(y)}`;
@@ -136,7 +145,7 @@ function star(b: Box): string {
 export const SHAPES: ShapeDef[] = [
   {
     id: "rectangle", label: "Rectangle", size: { width: 240, height: 120 },
-    draw: b => ({ outline: roundedRect(b, 2), insets: [0, 0, 0, 0] }),
+    draw: b => ({ outline: roundedRect(b, CARD_RADIUS * b.scale), insets: [0, 0, 0, 0] }),
   },
   {
     id: "ellipse", label: "Circle", size: { width: 180, height: 180 },
@@ -273,7 +282,7 @@ export const SHAPES: ShapeDef[] = [
     draw: b => {
       const bar = Math.min(b.w * 0.1, 16);
       return {
-        outline: roundedRect(b, 2),
+        outline: roundedRect(b, CARD_RADIUS * b.scale),
         lines: `M${pt(b.x0 + bar, b.y0)} V${n(b.y1)} M${pt(b.x1 - bar, b.y0)} V${n(b.y1)}`,
         insets: [0, bar + 2, 0, bar + 2],
       };
@@ -303,19 +312,19 @@ export const SHAPES: ShapeDef[] = [
 export const SHAPES_BY_ID = new Map<string, ShapeDef>(SHAPES.map(s => [s.id, s]));
 
 /** Draw `shape` for a card `width` x `height`, inset by `inset` on every side. */
-export function drawShape(shape: ShapeDef, width: number, height: number, inset = SHAPE_STROKE / 2): ShapeGeometry {
+export function drawShape(shape: ShapeDef, width: number, height: number, inset = SHAPE_STROKE / 2, scale = 1): ShapeGeometry {
   const x0 = inset;
   const y0 = inset;
   const x1 = Math.max(x0 + 1, width - inset);
   const y1 = Math.max(y0 + 1, height - inset);
-  return shape.draw({ x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 });
+  return shape.draw({ x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, scale });
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** Build an <svg> sized `width` x `height` (user units = pixels) for the shape. */
-export function buildShapeSvg(shape: ShapeDef, width: number, height: number, className: string, inset?: number): SVGSVGElement {
-  const geo = drawShape(shape, width, height, inset);
+export function buildShapeSvg(shape: ShapeDef, width: number, height: number, className: string, inset?: number, scale?: number): SVGSVGElement {
+  const geo = drawShape(shape, width, height, inset, scale);
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("class", className);
   svg.setAttribute("viewBox", `0 0 ${n(width)} ${n(height)}`);
@@ -351,7 +360,7 @@ export function buildShapeIcon(shape: ShapeDef, box = 26): SVGSVGElement {
   const scale = box / Math.max(width, height);
   const w = Math.max(10, width * scale);
   const h = Math.max(10, height * scale);
-  const svg = buildShapeSvg(shape, w, h, "canvasflow-shape-icon", 1);
+  const svg = buildShapeSvg(shape, w, h, "canvasflow-shape-icon", 1, scale);
   svg.setAttribute("width", n(w));
   svg.setAttribute("height", n(h));
   return svg;

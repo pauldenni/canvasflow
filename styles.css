@@ -133,7 +133,7 @@ svg.canvasflow-shape {
 
 svg.canvasflow-shape path {
   stroke: var(--canvas-color);
-  stroke-width: 2;
+  stroke-width: 1; /* same as a card border */
   stroke-linejoin: round;
   stroke-linecap: round;
 }
@@ -182,7 +182,7 @@ svg.canvasflow-shape .canvasflow-shape-lines {
 
 /* Locked shapes: a heavier outline (the shape version of the heavier bottom edge). */
 .canvas-node[data-canvasflow-shape][data-canvasflow-locked] svg.canvasflow-shape path {
-  stroke-width: 3.5;
+  stroke-width: 2.5;
 }
 
 /* Labels sit in the middle of the shape. */
