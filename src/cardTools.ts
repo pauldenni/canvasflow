@@ -1,6 +1,6 @@
 import { Menu, Notice, Plugin, setIcon, setTooltip } from "obsidian";
-import { SHAPES, SHAPES_BY_ID, ShapeDef, buildShapeIcon, buildShapeSvg, drawShape } from "./shapeGeometry";
-import { LineTools } from "./lineTools";
+import { SHAPES, SHAPES_BY_ID, SHAPE_STROKE, ShapeDef, buildShapeIcon, buildShapeSvg, drawShape } from "./shapeGeometry";
+import { LineStyle, LineTools, showStrokeMenu } from "./lineTools";
 
 /**
  * Extra tools in the Obsidian Canvas card action bar:
@@ -13,6 +13,8 @@ import { LineTools } from "./lineTools";
  *   buttons adds a text card drawn as a shape; the action bar can change a
  *   text card's shape. Stored on the node as `canvasflowShape: "<id>"`.
  *
+ * - Shape outlines: style and thickness, from the action bar. Stored on the
+ *   node as `canvasflowShapeLine: { style?, width? }`.
  * - Lines: style, thickness and curved/straight/elbow paths (see lineTools.ts).
  *
  * All of these live in the .canvas JSON (the canvas spec allows extra keys on nodes),
@@ -37,6 +39,7 @@ const LOCK_KEY = "canvasflowLocked";
 const BUTTON_CLASS = "canvasflow-format-button";
 const SELECTION_LOCKED_CLASS = "canvasflow-selection-locked";
 const SHAPE_KEY = "canvasflowShape";
+const SHAPE_LINE_KEY = "canvasflowShapeLine";
 const SHAPE_SVG_CLASS = "canvasflow-shape";
 const SHAPE_ADD_BUTTON_CLASS = "canvasflow-shape-add";
 const PICKER_CLASS = "canvasflow-shape-picker";
@@ -46,6 +49,12 @@ const NODE_SHAPE_KEY = "__canvasflowShapeKey";
 const NOTICE_THROTTLE_MS = 1500;
 
 type AnyObj = any;
+
+/** A shape's outline; the default is a solid 1px line, like a card border. */
+export interface ShapeOutline {
+  style?: Exclude<LineStyle, "solid">;
+  width?: number;
+}
 
 export class CardTools {
   private patched = new WeakMap<object, Set<string>>();
@@ -310,6 +319,11 @@ export class CardTools {
     attrs["data-canvasflow-locked"] = this.isLocked(node) ? "true" : null;
     this.setAttributes(el, attrs);
 
+    const outline = shape ? this.getOutline(node) : {};
+    this.setAttributes(el, { "data-canvasflow-outline-style": outline.style ?? null });
+    if (outline.width) el.style.setProperty("--canvasflow-outline-width", `${outline.width}px`);
+    else el.style.removeProperty("--canvasflow-outline-width");
+
     node[NODE_SHAPE] = shape?.id;
     this.renderShape(node);
     this.syncEditor(node);
@@ -403,15 +417,17 @@ export class CardTools {
 
     const width = Math.max(1, Number(node.width) || 0);
     const height = Math.max(1, Number(node.height) || 0);
-    const key = `${shape.id}:${width}x${height}`;
+    // Thicker outlines sit further in, so the whole stroke stays inside the card.
+    const stroke = this.getOutline(node).width ?? SHAPE_STROKE;
+    const key = `${shape.id}:${width}x${height}:${stroke}`;
     if (existing && node[NODE_SHAPE_KEY] === key) return;
 
-    const svg = buildShapeSvg(shape, width, height, SHAPE_SVG_CLASS);
+    const svg = buildShapeSvg(shape, width, height, SHAPE_SVG_CLASS, stroke / 2, 1, stroke);
     if (existing) existing.replaceWith(svg);
     else container.prepend(svg);
     node[NODE_SHAPE_KEY] = key;
 
-    const [top, right, bottom, left] = drawShape(shape, width, height).insets;
+    const [top, right, bottom, left] = drawShape(shape, width, height, stroke / 2, 1, stroke).insets;
     el.style.setProperty("--canvasflow-inset-top", `${Math.round(top)}px`);
     el.style.setProperty("--canvasflow-inset-right", `${Math.round(right)}px`);
     el.style.setProperty("--canvasflow-inset-bottom", `${Math.round(bottom)}px`);
@@ -529,9 +545,39 @@ export class CardTools {
       });
     });
     insert(shapeButton);
+
+    const shapeNodes = textNodes.filter(n => this.getShape(n));
+    if (!shapeNodes.length) return;
+    const outlines = shapeNodes.map(n => this.getOutline(n));
+    const customized = outlines.some(o => o.style || o.width);
+    const outlineButton = this.makeButton("pencil-line", shapeNodes.length > 1 ? "Outline styles" : "Outline style", customized);
+    outlineButton.addEventListener("click", evt => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      showStrokeMenu(outlineButton, outlines.map(o => ({ style: o.style ?? "solid", width: o.width ?? SHAPE_STROKE })), choice =>
+        this.commit(canvas, shapeNodes, node => {
+          const outline = this.getOutline(node);
+          if (choice.style) outline.style = choice.style === "solid" ? undefined : choice.style;
+          if (choice.width) outline.width = choice.width;
+          this.setOutline(node, outline);
+        }));
+    });
+    insert(outlineButton);
   }
 
   // ---------- shapes ----------
+
+  private getOutline(node: AnyObj): ShapeOutline {
+    const stored = this.getData(node)?.[SHAPE_LINE_KEY];
+    return stored && typeof stored === "object" ? { ...stored } : {};
+  }
+
+  private setOutline(node: AnyObj, outline: ShapeOutline) {
+    const clean: ShapeOutline = {};
+    if (outline.style) clean.style = outline.style;
+    if (outline.width && outline.width !== SHAPE_STROKE) clean.width = outline.width;
+    this.updateData(node, { [SHAPE_LINE_KEY]: Object.keys(clean).length ? clean : undefined });
+  }
 
   private setShape(node: AnyObj, id: string | null) {
     this.updateData(node, { [SHAPE_KEY]: id ?? undefined });

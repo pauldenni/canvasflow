@@ -31,6 +31,8 @@ Click a shape to add it in the middle of the view, or drag it to where you want 
 
 A shape is a text card underneath, so labels, colors, formatting, locking, connections and CanvasFlow focus all work as usual. To change a card's shape, or turn it back into a standard card, select it and use the **Shape** button in its action bar. The shape is saved in the `.canvas` file (`canvasflowShape`); other apps show a plain text card.
 
+The **Outline style** button sets a shape's outline to solid, dashed or dotted, and thin (the default, like a card border), medium, thick or extra thick. Thicker outlines stay inside the card, and corners still match a card's. Saved as `canvasflowShapeLine`.
+
 ## Line styles
 
 Select one or more lines and use the **Line style** button in the action bar to choose:

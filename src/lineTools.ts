@@ -37,7 +37,10 @@ const STYLES: Array<[LineStyle, string, string]> = [
 ];
 
 /** Small line icons for the menus (Obsidian icons use a 100x100 box). */
+let iconsRegistered = false;
 function registerIcons() {
+  if (iconsRegistered) return;
+  iconsRegistered = true;
   const line = (extra: string, width = 8) =>
     `<line x1="12" y1="50" x2="88" y2="50" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" ${extra}/>`;
   addIcon("canvasflow-line-solid", line(""));
@@ -250,24 +253,12 @@ export class LineTools {
     button.addEventListener("click", evt => {
       evt.preventDefault();
       evt.stopPropagation();
-      const menu = new Menu();
-      for (const [value, label, icon] of STYLES) {
-        menu.addItem(item => item
-          .setTitle(label)
-          .setIcon(icon)
-          .setChecked(options.every(o => styleOf(o) === value))
-          .onClick(() => update(o => ({ ...o, style: value === "solid" ? undefined : value }))));
-      }
-      menu.addSeparator();
-      for (const [value, label] of WIDTHS) {
-        menu.addItem(item => item
-          .setTitle(label)
-          .setIcon(`canvasflow-width-${value}`)
-          .setChecked(options.every(o => widthOf(o) === value))
-          .onClick(() => update(o => ({ ...o, width: value }))));
-      }
-      const rect = button.getBoundingClientRect();
-      menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+      showStrokeMenu(button, options.map(o => ({ style: styleOf(o), width: widthOf(o) })), choice =>
+        update(o => ({
+          ...o,
+          ...(choice.style ? { style: choice.style === "solid" ? undefined : choice.style } : {}),
+          ...(choice.width ? { width: choice.width } : {}),
+        })));
     });
     insert(button);
   }
@@ -315,6 +306,39 @@ export class LineTools {
     button.setAttribute("aria-label", `Line shape: ${label.toLowerCase()}`);
     setTooltip(button, `Line shape: ${label.toLowerCase()}`, { placement: "top" });
   }
+}
+
+// ---------- shared menu ----------
+
+/**
+ * The style and thickness menu, shared by lines and shape outlines.
+ * `current` holds each selected item's style and width; a choice reports
+ * only what was picked.
+ */
+export function showStrokeMenu(
+  anchor: HTMLElement,
+  current: Array<{ style: LineStyle; width: number }>,
+  onPick: (choice: { style?: LineStyle; width?: number }) => void,
+) {
+  registerIcons();
+  const menu = new Menu();
+  for (const [value, label, icon] of STYLES) {
+    menu.addItem(item => item
+      .setTitle(label)
+      .setIcon(icon)
+      .setChecked(current.every(c => c.style === value))
+      .onClick(() => onPick({ style: value })));
+  }
+  menu.addSeparator();
+  for (const [value, label] of WIDTHS) {
+    menu.addItem(item => item
+      .setTitle(label)
+      .setIcon(`canvasflow-width-${value}`)
+      .setChecked(current.every(c => c.width === value))
+      .onClick(() => onPick({ width: value })));
+  }
+  const rect = anchor.getBoundingClientRect();
+  menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
 }
 
 // ---------- geometry ----------

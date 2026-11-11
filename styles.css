@@ -143,7 +143,7 @@ svg.canvasflow-shape {
 
 svg.canvasflow-shape path {
   stroke: var(--canvas-color);
-  stroke-width: 1; /* same as a card border */
+  stroke-width: var(--canvasflow-outline-width, 1px); /* 1px, like a card border, unless chosen */
   stroke-linejoin: round;
   stroke-linecap: round;
 }
@@ -161,6 +161,17 @@ svg.canvasflow-shape .canvasflow-shape-outline {
 svg.canvasflow-shape .canvasflow-shape-outline.is-open,
 svg.canvasflow-shape .canvasflow-shape-lines {
   fill: none;
+}
+
+/* Outline style: dashes and dots scale with the outline, with a floor so thin outlines still read. */
+.canvas-node[data-canvasflow-outline-style="dashed"] svg.canvasflow-shape path {
+  stroke-dasharray:
+    calc(max(var(--canvasflow-outline-width, 1px), 2px) * 5)
+    calc(max(var(--canvasflow-outline-width, 1px), 2px) * 3.5);
+}
+
+.canvas-node[data-canvasflow-outline-style="dotted"] svg.canvasflow-shape path {
+  stroke-dasharray: 0 calc(max(var(--canvasflow-outline-width, 1px), 2px) * 2.5);
 }
 
 /* Colored cards: same tint as the canvas's own colored cards. */
@@ -201,7 +212,7 @@ svg.canvasflow-shape .canvasflow-shape-lines {
 
 /* Locked shapes: a heavier outline (the shape version of the heavier bottom edge). */
 .canvas-node[data-canvasflow-shape][data-canvasflow-locked] svg.canvasflow-shape path {
-  stroke-width: 2.5;
+  stroke-width: calc(var(--canvasflow-outline-width, 1px) + 1.5px);
 }
 
 /* Labels sit in the middle of the shape. */
