@@ -31,6 +31,17 @@ Click a shape to add it in the middle of the view, or drag it to where you want 
 
 A shape is a text card underneath, so labels, colors, formatting, locking, connections and CanvasFlow focus all work as usual. To change a card's shape, or turn it back into a standard card, select it and use the **Shape** button in its action bar. The shape is saved in the `.canvas` file (`canvasflowShape`); other apps show a plain text card.
 
+## Line styles
+
+Select one or more lines and use the **Line style** button in the action bar to choose:
+
+- **Style**: solid, dashed or dotted.
+- **Thickness**: thin, medium (Obsidian's default), thick or extra thick. Arrowheads grow with thicker lines.
+
+The button in the bar at the bottom of the canvas switches every line on that canvas between **curved** (Obsidian's default), **straight** and **elbow** (right-angled) lines.
+
+Line styles are saved on each line, and the line shape is saved with the canvas, all in the `.canvas` file. Undo works as usual. Without CanvasFlow, Obsidian shows the lines as plain curves.
+
 ## Locking cards
 
 Select any card (text, note, image, link or group) and click the lock button in its action bar. A locked card:

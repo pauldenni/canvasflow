@@ -297,3 +297,36 @@ body[data-canvasflow-shape] .markdown-source-view.mod-inside-iframe > .cm-editor
   margin-top: 6px;
   font-size: var(--font-ui-small);
 }
+
+/* ---------- Lines ---------- */
+
+/* Thickness (Obsidian's default is 2px; hovered and selected lines get 3.5px heavier, as usual). */
+.canvas-edges g[data-canvasflow-line-width] path.canvas-display-path {
+  stroke-width: calc(var(--canvasflow-line-width) * var(--zoom-multiplier));
+}
+
+.canvas-edges g.is-focused[data-canvasflow-line-width] path.canvas-display-path,
+.canvas:not(.is-connecting) .canvas-edges g[data-canvasflow-line-width]:hover path.canvas-display-path {
+  stroke-width: calc((var(--canvasflow-line-width) + 3.5px) * var(--zoom-multiplier));
+}
+
+.canvas-edges g[data-canvasflow-line-width] polygon.canvas-path-end {
+  transform: scale(calc(var(--zoom-multiplier) * var(--canvasflow-arrow-scale, 1)));
+}
+
+/* Dashes and dots scale with the line, with a floor so thin lines still read as dashed. */
+.canvas-edges g[data-canvasflow-line-style="dashed"] path.canvas-display-path {
+  stroke-dasharray:
+    calc(max(var(--canvasflow-line-width, 2px), 2px) * 5 * var(--zoom-multiplier))
+    calc(max(var(--canvasflow-line-width, 2px), 2px) * 3.5 * var(--zoom-multiplier));
+}
+
+.canvas-edges g[data-canvasflow-line-style="dotted"] path.canvas-display-path {
+  stroke-linecap: round;
+  stroke-dasharray: 0 calc(max(var(--canvasflow-line-width, 2px), 2px) * 2.5 * var(--zoom-multiplier));
+}
+
+/* Elbow lines: rounded joins at the turns. */
+.canvas-edges path.canvas-display-path {
+  stroke-linejoin: round;
+}

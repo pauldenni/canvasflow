@@ -3,7 +3,7 @@
   "name": "CanvasFlow",
   "version": "0.2.0",
   "minAppVersion": "1.5.0",
-  "description": "Adds a focus mode to Obsidian Canvas that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic) and card locking.",
+  "description": "Adds a focus mode to Obsidian Canvas that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, and line styles (dashed, dotted, thickness, straight and elbow lines).",
   "author": "Paul Denni",
   "authorUrl": "",
   "isDesktopOnly": false

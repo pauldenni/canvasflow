@@ -1,5 +1,6 @@
 import { Menu, Notice, Plugin, setIcon, setTooltip } from "obsidian";
 import { SHAPES, SHAPES_BY_ID, ShapeDef, buildShapeIcon, buildShapeSvg, drawShape } from "./shapeGeometry";
+import { LineTools } from "./lineTools";
 
 /**
  * Extra tools in the Obsidian Canvas card action bar:
@@ -12,7 +13,9 @@ import { SHAPES, SHAPES_BY_ID, ShapeDef, buildShapeIcon, buildShapeSvg, drawShap
  *   buttons adds a text card drawn as a shape; the action bar can change a
  *   text card's shape. Stored on the node as `canvasflowShape: "<id>"`.
  *
- * Both live in the .canvas JSON (the canvas spec allows extra keys on nodes),
+ * - Lines: style, thickness and curved/straight/elbow paths (see lineTools.ts).
+ *
+ * All of these live in the .canvas JSON (the canvas spec allows extra keys on nodes),
  * so they survive reloads, copy/paste and undo/redo. They're rendered by
  * mirroring them onto the node element as data attributes that styles.css
  * targets.
@@ -55,8 +58,14 @@ export class CardTools {
   private systemChange = 0;
   private lastNoticeAt = 0;
   private closePicker: (() => void) | null = null;
+  private lines: LineTools;
 
-  constructor(private plugin: Plugin, private formattingEnabled: () => boolean) {}
+  constructor(private plugin: Plugin, private formattingEnabled: () => boolean) {
+    this.lines = new LineTools(
+      (proto, method, wrap) => this.patchProto(proto, method, wrap),
+      cb => this.plugin.register(cb),
+    );
+  }
 
   load() {
     this.plugin.register(() => this.closePicker?.());
@@ -142,6 +151,7 @@ export class CardTools {
     }
 
     this.addShapeButton(canvas);
+    this.lines.patchCanvas(canvas);
   }
 
   /** Patch the node's class once (per card type) and apply its current styling. */
@@ -211,6 +221,7 @@ export class CardTools {
   private applyAll(canvas: AnyObj) {
     const nodes: AnyObj[] = canvas.nodes instanceof Map ? Array.from(canvas.nodes.values()) : [];
     for (const node of nodes) this.watchNode(node);
+    this.lines.applyAll(canvas);
   }
 
   /** Wrap a method on a shared prototype once; restored when the plugin unloads. */
@@ -437,8 +448,6 @@ export class CardTools {
     // Hide the selection's resize handles when everything selected is locked.
     canvas.wrapperEl?.classList?.toggle(SELECTION_LOCKED_CLASS, allLocked);
 
-    if (!cards.length) return;
-
     // Insert before the native "Edit" button so the bar reads
     // delete · color · zoom · [lock · align · bold · italic] · edit.
     const editButton = menuEl.querySelector<HTMLElement>('[aria-label="Edit"], .canvas-menu-edit');
@@ -446,6 +455,10 @@ export class CardTools {
       if (editButton && editButton.parentElement === menuEl) menuEl.insertBefore(btn, editButton);
       else menuEl.appendChild(btn);
     };
+
+    this.lines.renderButtons(canvas, insert, (icon, label, active) => this.makeButton(icon, label, active));
+
+    if (!cards.length) return;
 
     const many = cards.length > 1;
     const lockLabel = allLocked ? (many ? "Unlock cards" : "Unlock card") : (many ? "Lock cards" : "Lock card");
