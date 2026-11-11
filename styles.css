@@ -138,8 +138,14 @@ svg.canvasflow-shape path {
   stroke-linecap: round;
 }
 
-svg.canvasflow-shape .canvasflow-shape-outline {
+/* Fill like a text card: the card box, then the theme's embed background over it. */
+svg.canvasflow-shape path.canvasflow-shape-base {
   fill: var(--background-primary);
+  stroke: none !important;
+}
+
+svg.canvasflow-shape .canvasflow-shape-outline {
+  fill: var(--embed-background, transparent);
 }
 
 svg.canvasflow-shape .canvasflow-shape-outline.is-open,
@@ -153,7 +159,7 @@ svg.canvasflow-shape .canvasflow-shape-lines {
 }
 
 .canvas-node.is-themed svg.canvasflow-shape .canvasflow-shape-outline:not(.is-open) {
-  fill: color-mix(in oklch, var(--canvas-color) 7%, var(--background-primary));
+  fill: color-mix(in oklch, var(--canvas-color) 7%, transparent);
 }
 
 /* Selected: the outline takes the accent color, with a light box showing the resize area. */
@@ -271,6 +277,10 @@ body[data-canvasflow-shape] .markdown-source-view.mod-inside-iframe > .cm-editor
 .canvasflow-shape-icon {
   overflow: visible;
   pointer-events: none;
+}
+
+.canvasflow-shape-icon .canvasflow-shape-base {
+  display: none;
 }
 
 .canvasflow-shape-icon path {

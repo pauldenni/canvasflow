@@ -321,6 +321,16 @@ export function buildShapeSvg(shape: ShapeDef, width: number, height: number, cl
   svg.setAttribute("viewBox", `0 0 ${n(width)} ${n(height)}`);
   svg.setAttribute("aria-hidden", "true");
 
+  // Cards are two layers: the box (page background) and the text area over it
+  // (the theme's embed background, or a tint for colored cards). The base path
+  // is the box; the outline's own fill is the text area.
+  if (!geo.open) {
+    const base = document.createElementNS(SVG_NS, "path");
+    base.setAttribute("class", "canvasflow-shape-base");
+    base.setAttribute("d", geo.outline);
+    svg.appendChild(base);
+  }
+
   const outline = document.createElementNS(SVG_NS, "path");
   outline.setAttribute("class", geo.open ? "canvasflow-shape-outline is-open" : "canvasflow-shape-outline");
   outline.setAttribute("d", geo.outline);
