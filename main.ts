@@ -42,7 +42,7 @@ export default class CanvasFlowPlugin extends Plugin {
   private focusedNodeEl: HTMLElement | null = null;
   private statusEl: HTMLElement | null = null;
   private backButtonEl: HTMLButtonElement | null = null;
-  /** The view from before you focused a card; Escape and "Back to canvas" return here. */
+  /** The view from before you focused a card. Set while a card is focused; Escape and "Back to canvas" then zoom out to fit every card. */
   private returnView: Viewport | null = null;
   private pointerDownAt: { x: number; y: number } | null = null;
   private panFrame: number | null = null;
@@ -295,13 +295,43 @@ export default class CanvasFlowPlugin extends Plugin {
     evt.stopPropagation();
   }
 
-  /** Leave focus and return to the view you had before focusing any card. */
+  /**
+   * The view that fits every card, worked out the same way as Obsidian's
+   * "Zoom to fit" (10% margin, never past 100%), so we can glide there.
+   */
+  private getFitViewport(canvas: CanvasObject): Viewport | null {
+    const rect = canvas.canvasRect ?? canvas.wrapperEl?.getBoundingClientRect?.();
+    const nodes: any[] = canvas.nodes ? Array.from(canvas.nodes.values()) : [];
+    if (!rect?.width || !rect?.height || nodes.length === 0) return null;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const node of nodes) {
+      const bbox = this.getNodeBBox(node);
+      if (!bbox) continue;
+      minX = Math.min(minX, bbox.minX);
+      minY = Math.min(minY, bbox.minY);
+      maxX = Math.max(maxX, bbox.maxX);
+      maxY = Math.max(maxY, bbox.maxY);
+    }
+    if (!Number.isFinite(minX)) return null;
+
+    const scale = Math.min(
+      rect.width / (1.1 * Math.max(1, maxX - minX)),
+      rect.height / (1.1 * Math.max(1, maxY - minY)),
+      1,
+    );
+    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom: Math.log2(scale) };
+  }
+
+  /** Leave focus and zoom out to show every card. */
   private exitFocus() {
     const canvas = this.getCanvasObject();
     const previous = this.returnView;
     this.returnView = null;
 
-    if (canvas && previous) this.moveViewport(canvas, previous);
+    // An empty canvas has nothing to fit, so fall back to the view from before focusing.
+    const target = canvas ? (this.getFitViewport(canvas) ?? previous) : null;
+    if (canvas && target) this.moveViewport(canvas, target);
 
     // We've left that card's view, so clicking it again should focus it again.
     this.clearFocusedNode();
@@ -533,7 +563,7 @@ class CanvasFlowSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Escape exits focus")
-      .setDesc("Press Escape to leave focus and return to the view you had before.")
+      .setDesc("Press Escape to leave focus and zoom out to show every card.")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.exitFocusOnEscape)
         .onChange(async value => {
