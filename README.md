@@ -7,7 +7,7 @@ CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode t
 - Toggle CanvasFlow mode with the ribbon icon or the "Toggle CanvasFlow Mode" command.
 - Click a card to zoom in and center it, from any zoom level. Set how much of the screen it fills under "Focused card size" in settings.
 - Pan and zoom the canvas freely, the same as outside CanvasFlow mode. Dragging a card doesn't focus it.
-- Click another card to glide to it. Press Escape or Backspace, or use the floating "Back to canvas" button, to leave focus and return to the view you had before you focused any card. CanvasFlow mode stays on. Clicking the blank canvas does nothing.
+- Click another card to glide to it. Press Escape, or use the floating "Back to canvas" button, to leave focus and return to the view you had before you focused any card. CanvasFlow mode stays on. Clicking the blank canvas does nothing. Delete or Backspace deletes the selected card as usual, and you stay where you are.
 - Run "Show CanvasFlow diagnostics" to inspect your local Obsidian Canvas internals.
 
 ## Card text formatting

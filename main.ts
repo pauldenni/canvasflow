@@ -202,7 +202,8 @@ export default class CanvasFlowPlugin extends Plugin {
     const target = evt.target as HTMLElement | null;
     if (target?.closest("input, textarea, [contenteditable='true'], .cm-editor")) return;
 
-    if ((evt.key === "Escape" || evt.key === "Backspace") && this.returnView) {
+    // Delete/Backspace are left to Obsidian, which deletes the selected cards.
+    if (evt.key === "Escape" && this.returnView) {
       evt.preventDefault();
       evt.stopPropagation();
       this.exitFocus();
@@ -531,8 +532,8 @@ class CanvasFlowSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Escape/Backspace exits focus")
-      .setDesc("Press Escape or Backspace to leave focus and return to the view you had before.")
+      .setName("Escape exits focus")
+      .setDesc("Press Escape to leave focus and return to the view you had before.")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.exitFocusOnEscape)
         .onChange(async value => {
