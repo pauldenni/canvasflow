@@ -5,7 +5,8 @@ body.canvasflow-enabled .canvas {
 
 .canvasflow-status {
   position: fixed;
-  bottom: 16px;
+  /* Sit above Obsidian's status bar (backlinks, word count) in the corner. */
+  bottom: 44px;
   right: 16px;
   z-index: 9999;
   padding: 6px 10px;

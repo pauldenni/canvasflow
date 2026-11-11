@@ -42,7 +42,8 @@ export default class CanvasFlowPlugin extends Plugin {
   private focusedNodeEl: HTMLElement | null = null;
   private statusEl: HTMLElement | null = null;
   private backButtonEl: HTMLButtonElement | null = null;
-  private viewportStack: Viewport[] = [];
+  /** The view from before you focused a card; Escape and "Back to canvas" return here. */
+  private returnView: Viewport | null = null;
   private pointerDownAt: { x: number; y: number } | null = null;
   private panFrame: number | null = null;
 
@@ -72,8 +73,8 @@ export default class CanvasFlowPlugin extends Plugin {
 
     this.addCommand({
       id: "zoom-back-out",
-      name: "Zoom back out one level",
-      callback: () => this.zoomBackOut(),
+      name: "Back to canvas (exit focus)",
+      callback: () => this.exitFocus(),
     });
 
     this.addCommand({
@@ -131,7 +132,7 @@ export default class CanvasFlowPlugin extends Plugin {
     this.clearFocusedNode();
     this.removeStatusPill();
     this.removeBackButton();
-    this.viewportStack = [];
+    this.returnView = null;
     new Notice("CanvasFlow disabled");
   }
 
@@ -169,7 +170,7 @@ export default class CanvasFlowPlugin extends Plugin {
     if (target.closest(".canvasflow-back-button")) {
       evt.preventDefault();
       evt.stopPropagation();
-      this.zoomBackOut();
+      this.exitFocus();
       return;
     }
 
@@ -192,10 +193,7 @@ export default class CanvasFlowPlugin extends Plugin {
     const node = canvas ? this.findNodeForElement(canvas, nodeEl) : null;
     if (!canvas || !node) return;
 
-    // Clicking the card that's already focused just re-centers it, without adding a "back" level.
-    const alreadyFocused = nodeEl === this.focusedNodeEl;
-
-    window.setTimeout(() => this.focusNode(canvas, node, !alreadyFocused), 0);
+    window.setTimeout(() => this.focusNode(canvas, node), 0);
   }
 
   private handleKeydown(evt: KeyboardEvent) {
@@ -204,10 +202,10 @@ export default class CanvasFlowPlugin extends Plugin {
     const target = evt.target as HTMLElement | null;
     if (target?.closest("input, textarea, [contenteditable='true'], .cm-editor")) return;
 
-    if ((evt.key === "Escape" || evt.key === "Backspace") && this.viewportStack.length > 0) {
+    if ((evt.key === "Escape" || evt.key === "Backspace") && this.returnView) {
       evt.preventDefault();
       evt.stopPropagation();
-      this.zoomBackOut();
+      this.exitFocus();
     }
   }
 
@@ -296,9 +294,11 @@ export default class CanvasFlowPlugin extends Plugin {
     evt.stopPropagation();
   }
 
-  private zoomBackOut() {
+  /** Leave focus and return to the view you had before focusing any card. */
+  private exitFocus() {
     const canvas = this.getCanvasObject();
-    const previous = this.viewportStack.pop();
+    const previous = this.returnView;
+    this.returnView = null;
 
     if (canvas && previous) this.moveViewport(canvas, previous);
 
@@ -317,22 +317,20 @@ export default class CanvasFlowPlugin extends Plugin {
       return;
     }
 
-    this.focusNode(canvas, selected, true);
+    this.focusNode(canvas, selected);
   }
 
   /**
    * Zoom so the card fills `focusSize`% of the screen (capped at 200% zoom for
    * small cards) and center it, regardless of the current zoom level.
    */
-  private focusNode(canvas: CanvasObject, node: any, pushHistory: boolean) {
+  private focusNode(canvas: CanvasObject, node: any) {
     const bbox = this.getNodeBBox(node);
     const rect = canvas.canvasRect ?? canvas.wrapperEl?.getBoundingClientRect?.();
     if (!bbox || !rect || !rect.width || !rect.height) return;
 
-    if (pushHistory) {
-      const current = this.getCurrentViewport();
-      if (current) this.viewportStack.push(current);
-    }
+    // Moving from card to card keeps the original view, so one Escape gets you all the way out.
+    if (!this.returnView) this.returnView = this.getCurrentViewport();
 
     const fill = this.settings.focusSize / 100;
     const width = Math.max(1, bbox.maxX - bbox.minX);
@@ -381,8 +379,17 @@ export default class CanvasFlowPlugin extends Plugin {
     this.focusedNodeEl = null;
   }
 
+  /** Show or hide the status pill and back button to match the current settings. */
+  refreshOverlays() {
+    this.updateStatusPill();
+    this.updateBackButton();
+  }
+
   private updateStatusPill() {
-    if (!this.flowEnabled || !this.settings.showStatusPill) return;
+    if (!this.flowEnabled || !this.settings.showStatusPill) {
+      this.removeStatusPill();
+      return;
+    }
 
     if (!this.statusEl) {
       this.statusEl = document.createElement("div");
@@ -391,8 +398,7 @@ export default class CanvasFlowPlugin extends Plugin {
     }
 
     const focused = this.focusedNodeEl ? " • focused" : "";
-    const depth = this.viewportStack.length > 0 ? ` • ${this.viewportStack.length} level${this.viewportStack.length === 1 ? "" : "s"}` : "";
-    this.statusEl.textContent = `CanvasFlow${focused}${depth}`;
+    this.statusEl.textContent = `CanvasFlow${focused}`;
   }
 
   private removeStatusPill() {
@@ -401,7 +407,7 @@ export default class CanvasFlowPlugin extends Plugin {
   }
 
   private updateBackButton() {
-    if (!this.flowEnabled || !this.settings.showBackButton || this.viewportStack.length === 0) {
+    if (!this.flowEnabled || !this.settings.showBackButton || !this.returnView) {
       this.removeBackButton();
       return;
     }
@@ -510,6 +516,7 @@ class CanvasFlowSettingTab extends PluginSettingTab {
         .onChange(async value => {
           this.plugin.settings.showStatusPill = value;
           await this.plugin.saveSettings();
+          this.plugin.refreshOverlays();
         }));
 
     new Setting(containerEl)
@@ -520,11 +527,12 @@ class CanvasFlowSettingTab extends PluginSettingTab {
         .onChange(async value => {
           this.plugin.settings.showBackButton = value;
           await this.plugin.saveSettings();
+          this.plugin.refreshOverlays();
         }));
 
     new Setting(containerEl)
       .setName("Escape/Backspace exits focus")
-      .setDesc("Press Escape or Backspace to zoom back out one level.")
+      .setDesc("Press Escape or Backspace to leave focus and return to the view you had before.")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.exitFocusOnEscape)
         .onChange(async value => {
