@@ -1,5 +1,6 @@
 import { Menu, addIcon, setIcon, setTooltip } from "obsidian";
-import { Box, Point, SIDE_DIR, Side, routeElbow } from "./elbowRoute";
+import { Box, Point, SIDE_DIR, Side, alignFacingEnds, routeElbow } from "./elbowRoute";
+import { POINTED_SIDES, SHAPE_KEY } from "./shapeGeometry";
 
 /**
  * Extra options for the lines (edges) between cards:
@@ -189,18 +190,36 @@ export class LineTools {
     const toSide: Side | undefined = edge.to?.side;
     if (path === "curved" || !bezier || !fromSide || !toSide || !SIDE_DIR[fromSide] || !SIDE_DIR[toSide]) return;
 
-    const s: Point = bezier.from;
-    const c: Point = bezier.to;
     const fromDir = SIDE_DIR[fromSide];
     const toDir = SIDE_DIR[toSide];
-    // The points on the cards themselves.
-    const a = add(s, fromDir, -END_GAP);
-    const l = add(c, toDir, -END_GAP);
     const fromEnd = edge.fromLineEnd;
     const toEnd = edge.toLineEnd;
+    // The points on the cards themselves.
+    let a = add(bezier.from, fromDir, -END_GAP);
+    let l = add(bezier.to, toDir, -END_GAP);
+
+    // Facing ends that nearly line up are nudged along their sides until they do.
+    const fromBox: Box | undefined = edge.from.node.getBBox?.();
+    const toBox: Box | undefined = edge.to.node.getBBox?.();
+    const aligned = alignFacingEnds(
+      { point: a, side: fromSide, box: fromBox, fixed: isPointed(edge.from.node, fromSide) },
+      { point: l, side: toSide, box: toBox, fixed: isPointed(edge.to.node, toSide) },
+      (fromEnd ? END_GAP : 0) + (toEnd ? END_GAP : 0),
+    );
+    if (aligned) {
+      a = aligned.from;
+      l = aligned.to;
+    }
+    // Where the line starts and ends when there's an arrowhead.
+    const s = add(a, fromDir, END_GAP);
+    const c = add(l, toDir, END_GAP);
 
     let points: Point[];
-    if (path === "straight") {
+    if (aligned && path === "elbow") {
+      if (fromEnd?.el) fromEnd.el.style.transform = arrowTransform(a, -fromDir.x, -fromDir.y);
+      if (toEnd?.el) toEnd.el.style.transform = arrowTransform(l, -toDir.x, -toDir.y);
+      points = [fromEnd ? s : a, toEnd ? c : l];
+    } else if (path === "straight") {
       const toward = unit(l.x - a.x, l.y - a.y);
       // Leave room for arrowheads, and point them along the line.
       const start = fromEnd ? add(a, toward, END_GAP) : a;
@@ -211,7 +230,7 @@ export class LineTools {
     } else {
       const p1 = add(s, fromDir, ELBOW_LEAD);
       const p2 = add(c, toDir, ELBOW_LEAD);
-      const boxes = [edge.from.node.getBBox?.(), edge.to.node.getBBox?.()].filter(Boolean) as Box[];
+      const boxes = [fromBox, toBox].filter(Boolean) as Box[];
       // Arrowheads keep Obsidian's placement: they already face the card's side.
       points = routeElbow(fromEnd ? s : a, p1, p2, toEnd ? c : l, boxes);
     }
@@ -224,7 +243,7 @@ export class LineTools {
     // The label sits at bezier(0.5). Bend the control points so that lands on
     // the middle of our line: B(0.5) = (from + 3·cp1 + 3·cp2 + to) / 8.
     const mid = midpoint(points);
-    const cp = { x: (8 * mid.x - s.x - c.x) / 6, y: (8 * mid.y - s.y - c.y) / 6 };
+    const cp = { x: (8 * mid.x - bezier.from.x - bezier.to.x) / 6, y: (8 * mid.y - bezier.from.y - bezier.to.y) / 6 };
     edge.bezier = { ...bezier, cp1: cp, cp2: cp, path: d };
     try { edge.labelElement?.render?.(); } catch {}
   }
@@ -342,6 +361,14 @@ export function showStrokeMenu(
 }
 
 // ---------- geometry ----------
+
+/** Does this card's shape come to a point in the middle of `side`? */
+function isPointed(node: AnyObj, side: Side): boolean {
+  try {
+    const id = node?.getData?.()?.[SHAPE_KEY];
+    return typeof id === "string" && !!(POINTED_SIDES as Record<string, string[]>)[id]?.includes(side);
+  } catch { return false; }
+}
 
 function add(p: Point, dir: Point, length: number): Point {
   return { x: p.x + dir.x * length, y: p.y + dir.y * length };

@@ -1,5 +1,5 @@
 import { Menu, Notice, Plugin, setIcon, setTooltip } from "obsidian";
-import { SHAPES, SHAPES_BY_ID, SHAPE_STROKE, ShapeDef, buildShapeIcon, buildShapeSvg, drawShape } from "./shapeGeometry";
+import { SHAPES, SHAPES_BY_ID, SHAPE_KEY, SHAPE_STROKE, ShapeDef, buildShapeIcon, buildShapeSvg, drawShape } from "./shapeGeometry";
 import { LineStyle, LineTools, showStrokeMenu } from "./lineTools";
 
 /**
@@ -38,7 +38,6 @@ const TEXT_KEY = "canvasflowText";
 const LOCK_KEY = "canvasflowLocked";
 const BUTTON_CLASS = "canvasflow-format-button";
 const SELECTION_LOCKED_CLASS = "canvasflow-selection-locked";
-const SHAPE_KEY = "canvasflowShape";
 const SHAPE_LINE_KEY = "canvasflowShapeLine";
 const SHAPE_SVG_CLASS = "canvasflow-shape";
 const SHAPE_ADD_BUTTON_CLASS = "canvasflow-shape-add";

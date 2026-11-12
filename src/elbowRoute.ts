@@ -19,6 +19,58 @@ export const SIDE_DIR: Record<Side, Point> = {
 };
 
 /**
+ * Two ends this close to lining up are slid along their cards' sides until
+ * they do. Lines attach to the middle of a side, and with snap to grid (20)
+ * the middles of two cards can be stuck 5 or 10 apart whatever you do: the
+ * middle only moves by half of each resize step, and a default card (250
+ * wide) has its middle off the grid altogether.
+ */
+const ALIGN_TOLERANCE = 10;
+/** Keep a slid end off the card's rounded corners. */
+const ALIGN_CORNER = 8;
+
+/**
+ * For two ends on facing sides (bottom to top, right to left) that nearly
+ * line up, the points to use instead so the line between them is straight.
+ * An end marked `fixed` (the tip of a diamond, say) stays put and the other
+ * end moves the whole way; otherwise they meet in the middle.
+ *
+ * @param from, to   the points on the cards themselves
+ * @param minLength  room the line needs between the cards (arrowhead gaps)
+ * @returns null when there is nothing to straighten
+ */
+export function alignFacingEnds(
+  from: { point: Point; side: Side; box?: Box; fixed?: boolean },
+  to: { point: Point; side: Side; box?: Box; fixed?: boolean },
+  minLength = 0,
+): { from: Point; to: Point } | null {
+  const dir = SIDE_DIR[from.side];
+  const toDir = SIDE_DIR[to.side];
+  if (dir.x + toDir.x !== 0 || dir.y + toDir.y !== 0) return null;
+
+  const dx = to.point.x - from.point.x;
+  const dy = to.point.y - from.point.y;
+  if (dx * dir.x + dy * dir.y <= minLength) return null;
+
+  const vertical = dir.x === 0;
+  const offset = vertical ? dx : dy;
+  if (Math.abs(offset) < 0.01 || Math.abs(offset) > ALIGN_TOLERANCE + 0.01) return null;
+  if (from.fixed && to.fixed) return null;
+
+  const fromAt = vertical ? from.point.x : from.point.y;
+  const target = from.fixed ? fromAt : to.fixed ? fromAt + offset : fromAt + offset / 2;
+  for (const box of [from.box, to.box]) {
+    if (!box) continue;
+    const min = (vertical ? box.minX : box.minY) + ALIGN_CORNER;
+    const max = (vertical ? box.maxX : box.maxY) - ALIGN_CORNER;
+    if (target < min || target > max) return null;
+  }
+
+  const move = (p: Point): Point => (vertical ? { x: target, y: p.y } : { x: p.x, y: target });
+  return { from: move(from.point), to: move(to.point) };
+}
+
+/**
  * @param start  where the line starts (on the card, or at the arrowhead gap)
  * @param p1     the end of the lead out of the first card
  * @param p2     the end of the lead out of the second card

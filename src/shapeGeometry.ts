@@ -313,6 +313,22 @@ export const SHAPES: ShapeDef[] = [
 
 export const SHAPES_BY_ID = new Map<string, ShapeDef>(SHAPES.map(s => [s.id, s]));
 
+/** The key on a text card's data that holds its shape id. */
+export const SHAPE_KEY = "canvasflowShape";
+
+/**
+ * Sides where a shape comes to a point in the middle. A line has to meet
+ * these exactly; anywhere else along the side it would stop short of the shape.
+ */
+export const POINTED_SIDES: Partial<Record<ShapeId, string[]>> = {
+  diamond: ["top", "right", "bottom", "left"],
+  triangle: ["top"],
+  star: ["top"],
+  arrow: ["right"],
+  "double-arrow": ["left", "right"],
+  hexagon: ["left", "right"],
+};
+
 /** Draw `shape` for a card `width` x `height`, inset by `inset` on every side. */
 export function drawShape(shape: ShapeDef, width: number, height: number, inset = SHAPE_STROKE / 2, scale = 1, stroke = SHAPE_STROKE): ShapeGeometry {
   const x0 = inset;
