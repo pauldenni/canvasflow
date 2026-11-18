@@ -88,6 +88,10 @@ export default class CanvasFlowPlugin extends Plugin {
     this.registerDomEvent(document, "wheel", (evt: WheelEvent) => this.handleWheel(evt), { capture: true, passive: false });
     this.registerDomEvent(document, "keydown", (evt: KeyboardEvent) => this.handleKeydown(evt), true);
 
+    // The pill and back button belong to the canvas, so hide them when you switch to a note.
+    this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.refreshOverlays()));
+    this.registerEvent(this.app.workspace.on("layout-change", () => this.refreshOverlays()));
+
     this.app.workspace.onLayoutReady(() => {
       if (this.settings.enabledByDefault) {
         this.enableFlowMode();
@@ -142,6 +146,15 @@ export default class CanvasFlowPlugin extends Plugin {
 
     if (activeView?.getViewType?.() === "canvas") return activeView;
     return null;
+  }
+
+  /**
+   * True when the tab you're working in is a canvas. Uses the most recent tab
+   * in the main area, so clicking into a sidebar doesn't count as leaving.
+   */
+  private isCanvasShowing(): boolean {
+    const leaf = this.app.workspace.getMostRecentLeaf();
+    return (leaf?.view as any)?.getViewType?.() === "canvas";
   }
 
   private getCanvasObject(): CanvasObject | null {
@@ -410,14 +423,14 @@ export default class CanvasFlowPlugin extends Plugin {
     this.focusedNodeEl = null;
   }
 
-  /** Show or hide the status pill and back button to match the current settings. */
+  /** Show or hide the status pill and back button to match the current settings and tab. */
   refreshOverlays() {
     this.updateStatusPill();
     this.updateBackButton();
   }
 
   private updateStatusPill() {
-    if (!this.flowEnabled || !this.settings.showStatusPill) {
+    if (!this.flowEnabled || !this.settings.showStatusPill || !this.isCanvasShowing()) {
       this.removeStatusPill();
       return;
     }
@@ -438,7 +451,7 @@ export default class CanvasFlowPlugin extends Plugin {
   }
 
   private updateBackButton() {
-    if (!this.flowEnabled || !this.settings.showBackButton || !this.returnView) {
+    if (!this.flowEnabled || !this.settings.showBackButton || !this.returnView || !this.isCanvasShowing()) {
       this.removeBackButton();
       return;
     }
