@@ -360,3 +360,46 @@ body[data-canvasflow-shape] .markdown-source-view.mod-inside-iframe > .cm-editor
 .canvas-edges path.canvas-display-path {
   stroke-linejoin: round;
 }
+
+/* The middle stretch of an elbow line can be dragged sideways: an invisible strip to grab it by. */
+.canvas-edges path.canvasflow-bend-handle {
+  fill: none;
+  stroke: transparent;
+  stroke-width: calc(16px * var(--zoom-multiplier));
+  pointer-events: stroke;
+  cursor: ew-resize;
+}
+
+.canvas-edges path.canvasflow-bend-handle[data-axis="y"] {
+  cursor: ns-resize;
+}
+
+.canvas.is-connecting .canvas-edges path.canvasflow-bend-handle {
+  pointer-events: none;
+}
+
+/* ---------- Line labels ---------- */
+
+/* Labels can be dragged along a line or off to one side. */
+.canvas-path-label-wrapper .canvas-path-label:not(.is-editing) {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * "Keep line labels readable when zoomed out", turned off: Obsidian sizes
+ * labels by --zoom-multiplier so they stay readable. Pin it to 1 and
+ * they scale like card text, then hide where cards switch to placeholders.
+ */
+body.canvasflow-labels-zoom .canvas-path-label-wrapper {
+  --zoom-multiplier: 1;
+}
+
+body.canvasflow-labels-zoom .canvas-wrapper.mod-zoomed-out .canvas-path-label-wrapper {
+  visibility: hidden;
+}
+
+.canvas-path-label-wrapper.is-dragging,
+.canvas-path-label-wrapper.is-dragging .canvas-path-label {
+  cursor: grabbing;
+}

@@ -1,6 +1,6 @@
 # CanvasFlow - Obsidian Plugin
 
-CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, and line styles (dashed, dotted, thickness, straight and elbow lines).
+CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), and line labels you can move, with more than one per line.
 
 ## CanvasFlow mode
 
@@ -23,9 +23,9 @@ You can turn the buttons off in settings under "Card text formatting".
 
 ## Shapes
 
-Click the **Add shape** button in the bar at the bottom of the canvas, next to the add card, note and media buttons, then pick one of 16 shapes:
+Click the **Add shape** button in the bar at the bottom of the canvas, next to the add card, note and media buttons, then pick one of 28 shapes:
 
-rectangle, circle, diamond, triangle, rounded rectangle, cloud, star, arrow, parallelogram, hexagon, octagon, double arrow, speech bubble, cylinder, predefined process and brace note.
+rectangle, rounded rectangle, circle, diamond, triangle, inverted triangle, parallelogram, trapezoid, hexagon, octagon, star, cloud, arrow, left arrow, double arrow, chevron, pentagon arrow, predefined process, document, documents, cylinder, horizontal cylinder, stored data, display, paper tape, speech bubble, right brace note and left brace note.
 
 Click a shape to add it in the middle of the view, or drag it to where you want it. Then type its label, just like a standard card. Labels are centered unless you change the alignment, stay inside the shape (also while you type) and the outline redraws to fit when you resize it.
 
@@ -42,7 +42,19 @@ Select one or more lines and use the **Line style** button in the action bar to 
 
 The button in the bar at the bottom of the canvas switches every line on that canvas between **curved** (Obsidian's default), **straight** and **elbow** (right-angled) lines.
 
-Line styles are saved on each line, and the line shape is saved with the canvas, all in the `.canvas` file. Undo works as usual. Without CanvasFlow, Obsidian shows the lines as plain curves.
+On an elbow line that joins two left or right sides, or two top or bottom sides, drag the middle stretch to move where the line bends. The ends stay on the middle of their sides, and the bend snaps to halfway when you get close. Lines that turn only once (out of a side and into a top, say) have no middle stretch to move.
+
+Line styles and bends are saved on each line, and the line shape is saved with the canvas, all in the `.canvas` file. Undo works as usual. Without CanvasFlow, Obsidian shows the lines as plain curves.
+
+## Line labels
+
+- **Add**: double-click a line where you want a label, type the text and click away. Do it again for another label; a line can have as many as you like. A single click only selects the line.
+- **Move**: drag a label anywhere along its line. Pull it off the line and it snaps to sit right next to the line, above, below or beside it; it can't be left further away. Drag it back to put it on the line again. Labels keep their place on the line when cards move.
+- **Edit**: with the line selected, click a label. To remove a label, delete its text.
+
+Obsidian keeps line labels a readable size however far you zoom out, which can make them look large next to the cards. Turn off **Keep line labels readable when zoomed out** in settings and they shrink and grow like the text on cards, and hide once you zoom out far enough that cards show placeholders.
+
+A line's first label is Obsidian's own, so other apps show it (in the middle of the line). Its position is saved as `canvasflowLabelPos` and further labels as `canvasflowLabels`, on the line in the `.canvas` file. Undo works as usual.
 
 ## Locking cards
 

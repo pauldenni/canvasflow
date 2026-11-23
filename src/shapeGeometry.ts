@@ -11,17 +11,20 @@
  */
 
 export type ShapeId =
-  | "rectangle" | "ellipse" | "diamond" | "triangle"
-  | "terminator" | "cloud" | "star" | "arrow"
-  | "parallelogram" | "hexagon" | "octagon" | "double-arrow"
-  | "speech" | "cylinder" | "process" | "brace";
+  | "rectangle" | "terminator" | "ellipse" | "diamond"
+  | "triangle" | "merge" | "parallelogram" | "trapezoid"
+  | "hexagon" | "octagon" | "star" | "cloud"
+  | "arrow" | "arrow-left" | "double-arrow" | "chevron"
+  | "pentagon-arrow" | "process" | "document" | "documents"
+  | "cylinder" | "cylinder-side" | "stored-data" | "display"
+  | "paper-tape" | "speech" | "brace" | "brace-left";
 
 export interface ShapeGeometry {
   /** Filled and stroked outline (stroked only when `open`). */
   outline: string;
   /** Extra stroked-only detail lines (cylinder rim, process bars). */
   lines?: string;
-  /** True for shapes with no fill, e.g. the brace. */
+  /** True for shapes with no fill, e.g. the brace notes. */
   open?: boolean;
   /** Label padding: top, right, bottom, left. */
   insets: [number, number, number, number];
@@ -144,10 +147,46 @@ function star(b: Box): string {
   return poly(pts);
 }
 
+/** How tall the waves on documents and paper tape are (half the full swing). */
+const waveHeight = (b: Box) => Math.min(b.h * 0.1, 12);
+
+/** A wavy edge drawn right to left from (x1, y): a crest, then a dip that ends at (x0, y). */
+function waveLeft(x0: number, x1: number, y: number, a: number): string {
+  const w = x1 - x0;
+  return `Q${pt(x0 + w * 0.75, y - 2 * a)} ${pt(x0 + w / 2, y)} Q${pt(x0 + w * 0.25, y + 2 * a)} ${pt(x0, y)}`;
+}
+
+/** A curly brace down one edge with the note beside its point. `dir` 1: brace on the left, pointing right; -1: mirrored. */
+function brace(b: Box, dir: 1 | -1): ShapeGeometry {
+  const bw = Math.min(b.w * 0.12, b.h * 0.25, 22);
+  const edge = dir === 1 ? b.x0 : b.x1;
+  const xm = edge + (dir * bw) / 2;
+  const tip = edge + dir * bw;
+  const r = Math.min(bw / 2, b.h / 8);
+  return {
+    outline: [
+      `M${pt(edge, b.y0)}`, `C${pt(xm, b.y0)} ${pt(xm, b.y0)} ${pt(xm, b.y0 + r)}`,
+      `V${n(b.cy - r)}`, `C${pt(xm, b.cy)} ${pt(xm, b.cy)} ${pt(tip, b.cy)}`,
+      `C${pt(xm, b.cy)} ${pt(xm, b.cy)} ${pt(xm, b.cy + r)}`,
+      `V${n(b.y1 - r)}`, `C${pt(xm, b.y1)} ${pt(xm, b.y1)} ${pt(edge, b.y1)}`,
+    ].join(" "),
+    open: true,
+    insets: dir === 1 ? [0, 0, 0, bw + 6] : [0, bw + 6, 0, 0],
+  };
+}
+
+/** In the order the picker shows them, four to a row. */
 export const SHAPES: ShapeDef[] = [
   {
     id: "rectangle", label: "Rectangle", size: { width: 240, height: 120 },
     draw: b => ({ outline: roundedRect(b, cardRadius(b)), insets: [0, 0, 0, 0] }),
+  },
+  {
+    id: "terminator", label: "Rounded rectangle", size: { width: 240, height: 90 },
+    draw: b => {
+      const r = Math.min(b.h, b.w) / 2;
+      return { outline: roundedRect(b, r), insets: [0, r * 0.4, 0, r * 0.4] };
+    },
   },
   {
     id: "ellipse", label: "Circle", size: { width: 180, height: 180 },
@@ -171,33 +210,11 @@ export const SHAPES: ShapeDef[] = [
     }),
   },
   {
-    id: "terminator", label: "Rounded rectangle", size: { width: 240, height: 90 },
-    draw: b => {
-      const r = Math.min(b.h, b.w) / 2;
-      return { outline: roundedRect(b, r), insets: [0, r * 0.4, 0, r * 0.4] };
-    },
-  },
-  {
-    id: "cloud", label: "Cloud", size: { width: 260, height: 170 },
-    draw: b => ({ outline: cloud(b), insets: [b.h * 0.2, b.w * 0.16, b.h * 0.2, b.w * 0.16] }),
-  },
-  {
-    id: "star", label: "Star", size: { width: 200, height: 190 },
-    draw: b => ({ outline: star(b), insets: [b.h * 0.36, b.w * 0.3, b.h * 0.28, b.w * 0.3] }),
-  },
-  {
-    id: "arrow", label: "Arrow", size: { width: 240, height: 120 },
-    draw: b => {
-      const head = Math.min(b.w * 0.4, b.h * 0.75);
-      const shaft = b.h / 4;
-      return {
-        outline: poly([
-          [b.x0, b.cy - shaft], [b.x1 - head, b.cy - shaft], [b.x1 - head, b.y0], [b.x1, b.cy],
-          [b.x1 - head, b.y1], [b.x1 - head, b.cy + shaft], [b.x0, b.cy + shaft],
-        ]),
-        insets: [b.h * 0.25, head * 0.6, b.h * 0.25, 0],
-      };
-    },
+    id: "merge", label: "Inverted triangle", size: { width: 220, height: 180 },
+    draw: b => ({
+      outline: poly([[b.x0, b.y0], [b.x1, b.y0], [b.cx, b.y1]]),
+      insets: [b.h * 0.04, b.w * 0.27, b.h * 0.45, b.w * 0.27],
+    }),
   },
   {
     id: "parallelogram", label: "Parallelogram", size: { width: 240, height: 120 },
@@ -206,6 +223,16 @@ export const SHAPES: ShapeDef[] = [
       return {
         outline: poly([[b.x0 + skew, b.y0], [b.x1, b.y0], [b.x1 - skew, b.y1], [b.x0, b.y1]]),
         insets: [0, skew * 0.7, 0, skew * 0.7],
+      };
+    },
+  },
+  {
+    id: "trapezoid", label: "Trapezoid", size: { width: 240, height: 120 },
+    draw: b => {
+      const skew = Math.min(b.w * 0.18, b.h * 0.5);
+      return {
+        outline: poly([[b.x0, b.y0], [b.x1, b.y0], [b.x1 - skew, b.y1], [b.x0 + skew, b.y1]]),
+        insets: [0, skew * 0.8, 0, skew * 0.8],
       };
     },
   },
@@ -233,6 +260,42 @@ export const SHAPES: ShapeDef[] = [
     },
   },
   {
+    id: "star", label: "Star", size: { width: 200, height: 190 },
+    draw: b => ({ outline: star(b), insets: [b.h * 0.36, b.w * 0.3, b.h * 0.28, b.w * 0.3] }),
+  },
+  {
+    id: "cloud", label: "Cloud", size: { width: 260, height: 170 },
+    draw: b => ({ outline: cloud(b), insets: [b.h * 0.2, b.w * 0.16, b.h * 0.2, b.w * 0.16] }),
+  },
+  {
+    id: "arrow", label: "Arrow", size: { width: 240, height: 120 },
+    draw: b => {
+      const head = Math.min(b.w * 0.4, b.h * 0.75);
+      const shaft = b.h / 4;
+      return {
+        outline: poly([
+          [b.x0, b.cy - shaft], [b.x1 - head, b.cy - shaft], [b.x1 - head, b.y0], [b.x1, b.cy],
+          [b.x1 - head, b.y1], [b.x1 - head, b.cy + shaft], [b.x0, b.cy + shaft],
+        ]),
+        insets: [b.h * 0.25, head * 0.6, b.h * 0.25, 0],
+      };
+    },
+  },
+  {
+    id: "arrow-left", label: "Left arrow", size: { width: 240, height: 120 },
+    draw: b => {
+      const head = Math.min(b.w * 0.4, b.h * 0.75);
+      const shaft = b.h / 4;
+      return {
+        outline: poly([
+          [b.x1, b.cy - shaft], [b.x0 + head, b.cy - shaft], [b.x0 + head, b.y0], [b.x0, b.cy],
+          [b.x0 + head, b.y1], [b.x0 + head, b.cy + shaft], [b.x1, b.cy + shaft],
+        ]),
+        insets: [b.h * 0.25, 0, b.h * 0.25, head * 0.6],
+      };
+    },
+  },
+  {
     id: "double-arrow", label: "Double arrow", size: { width: 260, height: 120 },
     draw: b => {
       const head = Math.min(b.w * 0.3, b.h * 0.75);
@@ -244,6 +307,150 @@ export const SHAPES: ShapeDef[] = [
           [b.x0 + head, b.cy + shaft], [b.x0 + head, b.y1],
         ]),
         insets: [b.h * 0.25, head * 0.6, b.h * 0.25, head * 0.6],
+      };
+    },
+  },
+  {
+    id: "chevron", label: "Chevron", size: { width: 240, height: 120 },
+    draw: b => {
+      const p = Math.min(b.w * 0.25, b.h * 0.5);
+      return {
+        outline: poly([[b.x0, b.y0], [b.x1 - p, b.y0], [b.x1, b.cy], [b.x1 - p, b.y1], [b.x0, b.y1], [b.x0 + p, b.cy]]),
+        insets: [0, p * 0.7, 0, p],
+      };
+    },
+  },
+  {
+    id: "pentagon-arrow", label: "Pentagon arrow", size: { width: 240, height: 120 },
+    draw: b => {
+      const p = Math.min(b.w * 0.25, b.h * 0.5);
+      return {
+        outline: poly([[b.x0, b.y0], [b.x1 - p, b.y0], [b.x1, b.cy], [b.x1 - p, b.y1], [b.x0, b.y1]]),
+        insets: [0, p * 0.7, 0, 0],
+      };
+    },
+  },
+  {
+    id: "process", label: "Predefined process", size: { width: 260, height: 120 },
+    draw: b => {
+      const bar = Math.min(b.w * 0.1, 16);
+      return {
+        outline: roundedRect(b, cardRadius(b)),
+        lines: `M${pt(b.x0 + bar, b.y0)} V${n(b.y1)} M${pt(b.x1 - bar, b.y0)} V${n(b.y1)}`,
+        insets: [0, bar + 2, 0, bar + 2],
+      };
+    },
+  },
+  {
+    id: "document", label: "Document", size: { width: 220, height: 140 },
+    draw: b => {
+      const a = waveHeight(b);
+      const r = Math.min(cardRadius(b), b.w / 2, (b.h - 2 * a) / 2);
+      return {
+        outline: [
+          `M${pt(b.x0 + r, b.y0)}`, `H${n(b.x1 - r)}`, `A${n(r)} ${n(r)} 0 0 1 ${pt(b.x1, b.y0 + r)}`,
+          `V${n(b.y1 - a)}`, waveLeft(b.x0, b.x1, b.y1 - a, a),
+          `V${n(b.y0 + r)}`, `A${n(r)} ${n(r)} 0 0 1 ${pt(b.x0 + r, b.y0)}`, "Z",
+        ].join(" "),
+        insets: [0, 0, a * 2, 0],
+      };
+    },
+  },
+  {
+    id: "documents", label: "Documents", size: { width: 240, height: 160 },
+    draw: b => {
+      // Three pages, each a step down and to the right of the one behind it.
+      const o = Math.min(b.w * 0.05, b.h * 0.07, 10);
+      const a = waveHeight(b);
+      const r = Math.min(cardRadius(b), o * 0.8);
+      const pageW = b.w - 2 * o;
+      // How far a page's wavy bottom has dropped one step in from its left edge.
+      const drop = (o * 8 * a) / pageW;
+      const bottom = (k: number) => b.y1 - (2 - k) * o - a;
+      const corner = (x: number, y: number) => `A${n(r)} ${n(r)} 0 0 1 ${pt(x, y)}`;
+      const step = (k: number) => [
+        `H${n(b.x1 - (2 - k) * o - r)}`, corner(b.x1 - (2 - k) * o, b.y0 + k * o + r),
+      ].join(" ");
+      return {
+        outline: [
+          `M${pt(b.x0 + r, b.y0)}`, step(0), `V${n(b.y0 + o)}`, step(1), `V${n(b.y0 + 2 * o)}`, step(2),
+          `V${n(bottom(2))}`, waveLeft(b.x0 + 2 * o, b.x1, bottom(2), a),
+          `V${n(bottom(1) + drop)}`, `L${pt(b.x0 + o, bottom(1))}`,
+          `V${n(bottom(0) + drop)}`, `L${pt(b.x0, bottom(0))}`,
+          `V${n(b.y0 + r)}`, corner(b.x0 + r, b.y0), "Z",
+        ].join(" "),
+        // The top and left edges of the two pages in front.
+        lines: [1, 2].map(k => [
+          `M${pt(b.x0 + k * o, bottom(k - 1) + drop)}`, `V${n(b.y0 + k * o + r)}`,
+          corner(b.x0 + k * o + r, b.y0 + k * o), `H${n(b.x1 - (3 - k) * o)}`,
+        ].join(" ")).join(" "),
+        insets: [o * 2, 0, a * 2, o * 2],
+      };
+    },
+  },
+  {
+    id: "cylinder", label: "Cylinder", size: { width: 160, height: 190 },
+    draw: b => {
+      const rx = b.w / 2;
+      const ry = Math.min(b.h * 0.14, b.w * 0.2);
+      const top = b.y0 + ry;
+      const bottom = b.y1 - ry;
+      return {
+        outline: `M${pt(b.x0, top)} A${n(rx)} ${n(ry)} 0 0 1 ${pt(b.x1, top)} V${n(bottom)} A${n(rx)} ${n(ry)} 0 0 1 ${pt(b.x0, bottom)} Z`,
+        lines: `M${pt(b.x0, top)} A${n(rx)} ${n(ry)} 0 0 0 ${pt(b.x1, top)}`,
+        insets: [ry * 2, 0, ry * 0.6, 0],
+      };
+    },
+  },
+  {
+    id: "cylinder-side", label: "Horizontal cylinder", size: { width: 220, height: 130 },
+    draw: b => {
+      const rx = Math.min(b.w * 0.14, b.h * 0.2);
+      const ry = b.h / 2;
+      const left = b.x0 + rx;
+      const right = b.x1 - rx;
+      return {
+        outline: `M${pt(left, b.y0)} H${n(right)} A${n(rx)} ${n(ry)} 0 0 1 ${pt(right, b.y1)} H${n(left)} A${n(rx)} ${n(ry)} 0 0 1 ${pt(left, b.y0)} Z`,
+        lines: `M${pt(right, b.y0)} A${n(rx)} ${n(ry)} 0 0 0 ${pt(right, b.y1)}`,
+        insets: [0, rx * 2, 0, rx * 0.6],
+      };
+    },
+  },
+  {
+    id: "stored-data", label: "Stored data", size: { width: 220, height: 130 },
+    draw: b => {
+      const c = Math.min(b.w * 0.14, b.h * 0.25);
+      const ry = b.h / 2;
+      return {
+        outline: `M${pt(b.x0 + c, b.y0)} H${n(b.x1)} A${n(c)} ${n(ry)} 0 0 0 ${pt(b.x1, b.y1)} H${n(b.x0 + c)} A${n(c)} ${n(ry)} 0 0 1 ${pt(b.x0 + c, b.y0)} Z`,
+        insets: [0, c + 2, 0, c * 0.6],
+      };
+    },
+  },
+  {
+    id: "display", label: "Display", size: { width: 220, height: 130 },
+    draw: b => {
+      const p = Math.min(b.w * 0.2, b.h * 0.5);
+      const c = Math.min(b.w * 0.14, b.h * 0.25);
+      return {
+        outline: `M${pt(b.x0, b.cy)} L${pt(b.x0 + p, b.y0)} H${n(b.x1 - c)} A${n(c)} ${n(b.h / 2)} 0 0 1 ${pt(b.x1 - c, b.y1)} H${n(b.x0 + p)} Z`,
+        insets: [0, c * 0.6, 0, p * 0.7],
+      };
+    },
+  },
+  {
+    id: "paper-tape", label: "Paper tape", size: { width: 220, height: 140 },
+    draw: b => {
+      const a = waveHeight(b);
+      const top = b.y0 + a;
+      return {
+        outline: [
+          `M${pt(b.x0, top)}`,
+          `Q${pt(b.x0 + b.w * 0.25, top + 2 * a)} ${pt(b.cx, top)}`,
+          `Q${pt(b.x0 + b.w * 0.75, top - 2 * a)} ${pt(b.x1, top)}`,
+          `V${n(b.y1 - a)}`, waveLeft(b.x0, b.x1, b.y1 - a, a), "Z",
+        ].join(" "),
+        insets: [a * 2, 0, a * 2, 0],
       };
     },
   },
@@ -266,48 +473,12 @@ export const SHAPES: ShapeDef[] = [
     },
   },
   {
-    id: "cylinder", label: "Cylinder", size: { width: 160, height: 190 },
-    draw: b => {
-      const rx = b.w / 2;
-      const ry = Math.min(b.h * 0.14, b.w * 0.2);
-      const top = b.y0 + ry;
-      const bottom = b.y1 - ry;
-      return {
-        outline: `M${pt(b.x0, top)} A${n(rx)} ${n(ry)} 0 0 1 ${pt(b.x1, top)} V${n(bottom)} A${n(rx)} ${n(ry)} 0 0 1 ${pt(b.x0, bottom)} Z`,
-        lines: `M${pt(b.x0, top)} A${n(rx)} ${n(ry)} 0 0 0 ${pt(b.x1, top)}`,
-        insets: [ry * 2, 0, ry * 0.6, 0],
-      };
-    },
+    id: "brace", label: "Right brace note", size: { width: 240, height: 140 },
+    draw: b => brace(b, 1),
   },
   {
-    id: "process", label: "Predefined process", size: { width: 260, height: 120 },
-    draw: b => {
-      const bar = Math.min(b.w * 0.1, 16);
-      return {
-        outline: roundedRect(b, cardRadius(b)),
-        lines: `M${pt(b.x0 + bar, b.y0)} V${n(b.y1)} M${pt(b.x1 - bar, b.y0)} V${n(b.y1)}`,
-        insets: [0, bar + 2, 0, bar + 2],
-      };
-    },
-  },
-  {
-    id: "brace", label: "Brace note", size: { width: 240, height: 140 },
-    draw: b => {
-      const bw = Math.min(b.w * 0.12, b.h * 0.25, 22);
-      const xm = b.x0 + bw / 2;
-      const tip = b.x0 + bw;
-      const r = Math.min(bw / 2, b.h / 8);
-      return {
-        outline: [
-          `M${pt(b.x0, b.y0)}`, `C${pt(xm, b.y0)} ${pt(xm, b.y0)} ${pt(xm, b.y0 + r)}`,
-          `V${n(b.cy - r)}`, `C${pt(xm, b.cy)} ${pt(xm, b.cy)} ${pt(tip, b.cy)}`,
-          `C${pt(xm, b.cy)} ${pt(xm, b.cy)} ${pt(xm, b.cy + r)}`,
-          `V${n(b.y1 - r)}`, `C${pt(xm, b.y1)} ${pt(xm, b.y1)} ${pt(b.x0, b.y1)}`,
-        ].join(" "),
-        open: true,
-        insets: [0, 0, 0, bw + 6],
-      };
-    },
+    id: "brace-left", label: "Left brace note", size: { width: 240, height: 140 },
+    draw: b => brace(b, -1),
   },
 ];
 
@@ -324,7 +495,12 @@ export const POINTED_SIDES: Partial<Record<ShapeId, string[]>> = {
   diamond: ["top", "right", "bottom", "left"],
   triangle: ["top"],
   star: ["top"],
+  merge: ["bottom"],
   arrow: ["right"],
+  "arrow-left": ["left"],
+  chevron: ["right"],
+  "pentagon-arrow": ["right"],
+  display: ["left"],
   "double-arrow": ["left", "right"],
   hexagon: ["left", "right"],
 };

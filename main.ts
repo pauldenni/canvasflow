@@ -10,6 +10,8 @@ interface CanvasFlowSettings {
   showBackButton: boolean;
   exitFocusOnEscape: boolean;
   showCardFormatting: boolean;
+  /** Line labels stay a readable size when zoomed out (Obsidian's default). Off: they shrink with the canvas. */
+  keepLabelsReadable: boolean;
 }
 
 const DEFAULT_SETTINGS: CanvasFlowSettings = {
@@ -20,7 +22,10 @@ const DEFAULT_SETTINGS: CanvasFlowSettings = {
   showBackButton: true,
   exitFocusOnEscape: true,
   showCardFormatting: true,
+  keepLabelsReadable: true,
 };
+
+const LABELS_ZOOM_CLASS = "canvasflow-labels-zoom";
 
 type CanvasView = any;
 type CanvasObject = any;
@@ -54,6 +59,9 @@ export default class CanvasFlowPlugin extends Plugin {
 
     this.cardTools = new CardTools(this, () => this.settings.showCardFormatting);
     this.cardTools.load();
+
+    this.applyLabelScaling();
+    this.register(() => document.body.classList.remove(LABELS_ZOOM_CLASS));
 
     this.addRibbonIcon("focus", "Toggle CanvasFlow", () => {
       this.toggleFlowMode();
@@ -116,6 +124,11 @@ export default class CanvasFlowPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+
+  /** styles.css does the rest: with this class, line labels shrink and grow like card text. */
+  applyLabelScaling() {
+    document.body.classList.toggle(LABELS_ZOOM_CLASS, !this.settings.keepLabelsReadable);
   }
 
   private toggleFlowMode() {
@@ -518,6 +531,17 @@ class CanvasFlowSettingTab extends PluginSettingTab {
           this.plugin.settings.showCardFormatting = value;
           await this.plugin.saveSettings();
           this.plugin.cardTools.refreshAll();
+        }));
+
+    new Setting(containerEl)
+      .setName("Keep line labels readable when zoomed out")
+      .setDesc("On: line labels stay a readable size however far you zoom out (Obsidian's default), which can make them look large next to the cards. Off: labels shrink and grow with the canvas, like the text on cards, and hide once you zoom out far enough that cards show placeholders.")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.keepLabelsReadable)
+        .onChange(async value => {
+          this.plugin.settings.keepLabelsReadable = value;
+          await this.plugin.saveSettings();
+          this.plugin.applyLabelScaling();
         }));
 
     new Setting(containerEl)
