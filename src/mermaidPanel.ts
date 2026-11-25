@@ -104,6 +104,10 @@ export class MermaidPanel extends ItemView {
 
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.pickTarget()));
     this.registerEvent(this.app.workspace.on("layout-change", () => this.pickTarget()));
+    this.registerEvent(this.app.workspace.on("file-open", () => {
+      this.pickTarget();
+      this.refreshSoon();
+    }));
     // Catches changes that don't come through the canvas itself (sync, another window).
     this.registerEvent(this.app.vault.on("modify", file => {
       if (file instanceof TFile && file === this.targetFile()) this.refreshSoon();
@@ -157,22 +161,30 @@ export class MermaidPanel extends ItemView {
     this.applySoon.cancel();
 
     const view = next?.view as AnyObj;
-    if (view && typeof view.requestSave === "function") {
-      // Every change to a canvas ends in a save request, so that's where to listen.
-      const original = view.requestSave;
-      const own = Object.prototype.hasOwnProperty.call(view, "requestSave");
+    if (view) {
+      // Two places to listen. Every change made on the canvas ends in a save
+      // request. And the canvas is filled in by setViewData: when the file
+      // first loads (which can be after the tab opens) and whenever the file
+      // is changed from outside, such as from a linked note.
       const panel = this;
-      const hooked = function (this: AnyObj, ...args: any[]) {
-        const out = original.apply(this, args);
-        panel.refreshSoon();
-        return out;
-      };
-      view.requestSave = hooked;
-      this.unhook = () => {
-        if (view.requestSave !== hooked) return;
-        if (own) view.requestSave = original;
-        else delete view.requestSave;
-      };
+      const undo: Array<() => void> = [];
+      for (const method of ["requestSave", "setViewData"]) {
+        const original = view[method];
+        if (typeof original !== "function") continue;
+        const own = Object.prototype.hasOwnProperty.call(view, method);
+        const hooked = function (this: AnyObj, ...args: any[]) {
+          const out = original.apply(this, args);
+          panel.refreshSoon();
+          return out;
+        };
+        view[method] = hooked;
+        undo.push(() => {
+          if (view[method] !== hooked) return;
+          if (own) view[method] = original;
+          else delete view[method];
+        });
+      }
+      this.unhook = () => undo.forEach(fn => fn());
     }
 
     this.refreshFromCanvas(true);

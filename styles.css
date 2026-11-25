@@ -479,3 +479,21 @@ body.canvasflow-labels-zoom .canvas-wrapper.mod-zoomed-out .canvas-path-label-wr
 .canvasflow-mermaid-status[data-kind="error"] { color: var(--text-error); }
 .canvasflow-mermaid-status[data-kind="warning"] { color: var(--text-warning); }
 .canvasflow-mermaid-status button { flex: none; }
+
+/* "Edit as a canvas" button on a Mermaid chart in a note */
+.canvasflow-mermaid-block {
+  position: relative;
+}
+
+.canvasflow-mermaid-edit {
+  position: absolute;
+  top: var(--size-2-2);
+  right: var(--size-2-2);
+  opacity: 0;
+  transition: opacity 0.1s ease-in-out;
+}
+
+.canvasflow-mermaid-block:hover .canvasflow-mermaid-edit,
+.canvasflow-mermaid-edit:focus-visible {
+  opacity: 1;
+}

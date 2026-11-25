@@ -2,6 +2,7 @@ import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from "obsidian"
 import { CardTools } from "./src/cardTools";
 import { canvasToMermaid } from "./src/mermaidExport";
 import { mermaidToCanvas } from "./src/mermaidImport";
+import { MermaidNoteEditor } from "./src/mermaidNote";
 import { MERMAID_VIEW_TYPE, MermaidPanel } from "./src/mermaidPanel";
 
 interface CanvasFlowSettings {
@@ -60,7 +61,11 @@ export default class CanvasFlowPlugin extends Plugin {
 
     this.addSettingTab(new CanvasFlowSettingTab(this.app, this));
 
-    this.cardTools = new CardTools(this, () => this.settings.showCardFormatting);
+    this.cardTools = new CardTools(
+      this,
+      () => this.settings.showCardFormatting,
+      (canvas, asCodeBlock) => this.copyAsMermaid(asCodeBlock, canvas),
+    );
     this.cardTools.load();
 
     this.applyLabelScaling();
@@ -107,6 +112,7 @@ export default class CanvasFlowPlugin extends Plugin {
     });
 
     this.registerView(MERMAID_VIEW_TYPE, leaf => new MermaidPanel(leaf));
+    new MermaidNoteEditor(this).load();
 
     this.addCommand({
       id: "open-mermaid-panel",
@@ -516,8 +522,7 @@ export default class CanvasFlowPlugin extends Plugin {
    * Copy the canvas as a Mermaid flowchart. With cards selected, only those
    * cards and the lines between them are copied.
    */
-  private async copyAsMermaid(asCodeBlock: boolean) {
-    const canvas = this.getCanvasObject();
+  private async copyAsMermaid(asCodeBlock: boolean, canvas: CanvasObject | null = this.getCanvasObject()) {
     let data: any = null;
     try { data = canvas?.getData?.(); } catch {}
     if (!canvas || !data) {

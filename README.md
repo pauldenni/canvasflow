@@ -1,6 +1,6 @@
 # CanvasFlow - Obsidian Plugin
 
-CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), line labels you can move, with more than one per line, and Mermaid support: a live Mermaid code panel for the canvas, copying a canvas as a Mermaid flowchart, and adding a Mermaid flowchart to a canvas.
+CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), line labels you can move, with more than one per line, and Mermaid support: a live Mermaid code panel for the canvas, editing a note's Mermaid flowchart as a canvas, copying a canvas as a Mermaid flowchart, and adding a Mermaid flowchart to a canvas.
 
 ## CanvasFlow mode
 
@@ -58,12 +58,14 @@ A line's first label is Obsidian's own, so other apps show it (in the middle of 
 
 ## Copy as Mermaid
 
-Turn a canvas into a [Mermaid](https://mermaid.js.org) flowchart you can paste into a note, GitHub or mermaid.live. Open the command palette and run:
+Turn a canvas into a [Mermaid](https://mermaid.js.org) flowchart you can paste into a note, GitHub or mermaid.live. There are two ways to copy:
 
-- **Copy canvas as Mermaid**: the flowchart code on its own.
-- **Copy canvas as Mermaid code block (for notes)**: the same, wrapped in a `mermaid` code block, ready to paste into a note.
+- **Copy as Mermaid**: the flowchart code on its own.
+- **Copy as Mermaid code block (for notes)**: the same, wrapped in a `mermaid` code block, ready to paste into a note.
 
-With cards selected, only those cards and the lines between them are copied. Otherwise the whole canvas is.
+Select the cards you want and click one of the two copy buttons in the action bar above the selection, next to the lock button. Or open the command palette and run **Copy canvas as Mermaid** or **Copy canvas as Mermaid code block (for notes)**.
+
+With cards selected, only those cards and the lines between them are copied. With nothing selected, the commands copy the whole canvas.
 
 What carries over:
 
@@ -118,6 +120,28 @@ Things to know:
 - Moving a card between subgraphs in the code, or changing the chart's direction (`TD`, `LR`), doesn't move cards that are already on the canvas. Drag them on the canvas instead.
 - What the code can't show (card positions and sizes, line bends, extra labels on a line, shapes Mermaid has no match for) is left alone when you edit the code.
 
+## Edit a note's Mermaid flowchart as a canvas
+
+Turn a `mermaid` flowchart in a note into a canvas you can draw on, with the note kept up to date.
+
+The quickest way: in live preview, hover over the drawn chart in the note and click the **Edit as a canvas** button that appears at its top right, next to Obsidian's own "edit this block" button. Like that button, it isn't shown in reading view.
+
+You can also click inside the Mermaid code and either run **Edit Mermaid block as a canvas** from the command palette, or right-click and choose it from the menu.
+
+The first time, CanvasFlow makes a canvas file next to the note, named after it (`My note flowchart.canvas`), lays the chart out on it and opens it beside the note. After that the same canvas opens again, with your layout.
+
+The note and the canvas then follow each other, a couple of seconds after either one saves:
+
+- **Change the canvas** (move, add, connect, relabel or delete cards and lines) and the block in the note is rewritten from it.
+- **Change the code in the note** and the canvas is updated. Cards keep their place; new nodes are added next to the card they connect to.
+
+Things to know:
+
+- The block gets one extra comment line, `%% CanvasFlow link ...`. Mermaid ignores it, and it's how the block and its canvas find each other, even after you rename or move either file. Delete that line to cut the tie.
+- The first time you change the canvas, the block is rewritten in CanvasFlow's own layout, so your comments and the order of your lines aren't kept. Until then your code stays as you wrote it.
+- Code that can't be read is never applied to the canvas. Deleting most of the code doesn't empty the canvas either; run the command again if you really mean to replace the chart.
+- Only flowcharts (`flowchart` or `graph`) can be edited this way.
+
 ## Locking cards
 
 Select any card (text, note, image, link or group) and click the lock button in its action bar. A locked card:
@@ -155,3 +179,4 @@ If you keep the code somewhere else, the build can copy the plugin into your vau
 - Copy canvas as Mermaid code block (for notes)
 - Add Mermaid flowchart to canvas
 - Open Mermaid code panel
+- Edit Mermaid block as a canvas (in a note, with the cursor in a Mermaid block)

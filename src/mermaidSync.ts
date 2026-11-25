@@ -138,7 +138,8 @@ export function syncCanvasFromMermaid(data: AnyObj, source: string, options: Mer
       if (node.type === "text") {
         if (found.text !== exportedText(node)) { node.text = found.text; touched = true; }
         const shape = MERMAID_SHAPES[found.shape] ?? "rectangle";
-        if (shape !== exportedShape(node)) { node.canvasflowShape = shape; touched = true; }
+        // A shape Mermaid has no match for reads back as a rectangle; that isn't a change.
+        if (shape !== node.canvasflowShape && shape !== exportedShape(node)) { node.canvasflowShape = shape; touched = true; }
         if (node.canvasflowShape) {
           const outline = strokeOptions(found.styles, 1) ?? {};
           const now = node.canvasflowShapeLine ?? {};
@@ -294,12 +295,16 @@ export function syncCanvasFromMermaid(data: AnyObj, source: string, options: Mer
       setOrDelete(edge, "toEnd", atCanvasTo ? undefined : "none");
       touched = true;
     }
-    if (want.stroke !== view.stroke) {
+    // linkStyle can make a line thick or dashed too.
+    const styled = strokeOptions(want.styles, 2) ?? {};
+    const stroke = want.stroke !== "normal" ? want.stroke
+      : styled.style ? "dotted" : (styled.width ?? 2) >= 4 ? "thick" : "normal";
+    if (stroke !== view.stroke) {
       const line = { ...(edge.canvasflowLine ?? {}) };
-      if (want.stroke === "dotted") line.style = "dotted";
+      if (stroke === "dotted") line.style = "dotted";
       else delete line.style;
-      if (want.stroke === "thick" && (line.width ?? 2) < 4) line.width = 4;
-      if (want.stroke === "normal" && (line.width ?? 2) >= 4) delete line.width;
+      if (stroke === "thick" && (line.width ?? 2) < 4) line.width = 4;
+      if (stroke === "normal" && (line.width ?? 2) >= 4) delete line.width;
       setOrDelete(edge, "canvasflowLine", Object.keys(line).length ? line : undefined);
       touched = true;
     }

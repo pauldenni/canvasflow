@@ -68,7 +68,12 @@ export class CardTools {
   private closePicker: (() => void) | null = null;
   private lines: LineTools;
 
-  constructor(private plugin: Plugin, private formattingEnabled: () => boolean) {
+  constructor(
+    private plugin: Plugin,
+    private formattingEnabled: () => boolean,
+    /** Copies the selection as Mermaid code; `asCodeBlock` wraps it for pasting into a note. */
+    private copyAsMermaid?: (canvas: AnyObj, asCodeBlock: boolean) => void,
+  ) {
     this.lines = new LineTools(
       (proto, method, wrap) => this.patchProto(proto, method, wrap),
       cb => this.plugin.register(cb),
@@ -153,6 +158,7 @@ export class CardTools {
       this.patchProto(Object.getPrototypeOf(menu), "render", orig => function (this: AnyObj, ...args: any[]) {
         const result = orig.apply(this, args);
         try { self.renderButtons(this); } catch (err) { console.error("[CanvasFlow] card buttons", err); }
+        try { self.centerMenu(this); } catch {}
         return result;
       });
       try { menu.render?.(); } catch {}
@@ -450,6 +456,38 @@ export class CardTools {
 
   // ---------- action bar ----------
 
+  /**
+   * Obsidian centers the action bar over the selection using the bar's width
+   * before our buttons are added, which leaves it off to the right. Center it
+   * again at its real width, kept inside the canvas like Obsidian does.
+   */
+  private centerMenu(menu: AnyObj) {
+    const canvas = menu.canvas;
+    const containerEl: HTMLElement | undefined = menu.containerEl;
+    const menuEl: HTMLElement | undefined = menu.menuEl;
+    if (!canvas || !containerEl?.isConnected || !menuEl) return;
+
+    const items: AnyObj[] = Array.from(canvas.selection ?? []);
+    const rect = canvas.canvasRect;
+    const scale = canvas.scale;
+    const width = menuEl.getBoundingClientRect().width;
+    if (!items.length || !rect?.width || typeof scale !== "number" || typeof canvas.x !== "number" || !width) return;
+
+    let minX = Infinity, maxX = -Infinity;
+    for (const item of items) {
+      const box = item.getBBox?.();
+      if (!box) continue;
+      minX = Math.min(minX, box.minX);
+      maxX = Math.max(maxX, box.maxX);
+    }
+    if (!Number.isFinite(minX)) return;
+
+    const margin = 10;
+    const centered = ((minX + maxX) / 2 - canvas.x) * scale - width / 2 + rect.width / 2;
+    const left = Math.max(margin, Math.min(centered, rect.width - width - margin));
+    containerEl.style.left = `${left}px`;
+  }
+
   private renderButtons(menu: AnyObj) {
     const canvas = menu.canvas ?? this.getOpenCanvases().find(c => c.menu === menu);
     const menuEl: HTMLElement | null = menu.menuEl ?? canvas?.wrapperEl?.querySelector?.(".canvas-menu") ?? null;
@@ -484,6 +522,22 @@ export class CardTools {
       this.commit(canvas, cards, node => this.setLocked(node, !allLocked));
     });
     insert(lockButton);
+
+    if (this.copyAsMermaid) {
+      const copies: Array<[string, string, boolean]> = [
+        ["workflow", "Copy as Mermaid", false],
+        ["file-code", "Copy as Mermaid code block (for notes)", true],
+      ];
+      for (const [icon, label, asCodeBlock] of copies) {
+        const button = this.makeButton(icon, label);
+        button.addEventListener("click", evt => {
+          evt.preventDefault();
+          evt.stopPropagation();
+          this.copyAsMermaid?.(canvas, asCodeBlock);
+        });
+        insert(button);
+      }
+    }
 
     if (!this.formattingEnabled()) return;
 
