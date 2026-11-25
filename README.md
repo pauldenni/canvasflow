@@ -1,10 +1,11 @@
 # CanvasFlow - Obsidian Plugin
 
-CanvasFlow is an Obsidian plugin for flowcharts on Canvas. Edit Mermaid flowcharts by drawing them on Canvas, and turn any canvas flowchart into Mermaid code. Switch seamlessly between writing Mermaid code and editing directly on the canvas.
+CanvasFlow is an Obsidian plugin for flowcharts on Canvas. Edit Mermaid flowcharts by drawing them on Canvas, and turn any canvas flowchart into Mermaid code. Switch seamlessly between writing Mermaid code and editing directly on the canvas. It builds on what Obsidian already has: your flowcharts are ordinary Canvas files and ordinary Mermaid code blocks in your notes, so they keep working anywhere Obsidian does, with or without the plugin.
 
 - **Mermaid, both ways:** a live code panel beside the canvas, visual editing of the Mermaid blocks in your notes, and copying or adding flowcharts as code.
 - **Diagramming tools:** 28 shapes, line styles (dashed, dotted, thickness, straight and elbow lines), movable line labels, text formatting and card locking.
 - **Focus mode:** glide between cards and center the one you click, for walking through a diagram.
+- **Built on Obsidian's own features:** no new file format and no separate editor. Canvases stay standard `.canvas` files, and Mermaid stays in standard code blocks that Obsidian draws itself.
 
 ## Mermaid code panel
 

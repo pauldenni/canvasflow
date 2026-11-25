@@ -3,7 +3,7 @@
   "name": "CanvasFlow",
   "version": "0.5.0",
   "minAppVersion": "1.5.0",
-  "description": "Edit Mermaid flowcharts by drawing them on Canvas, and turn any canvas flowchart into Mermaid code. Adds shapes, line styles and labels, card locking, and a focus mode that glides between cards.",
+  "description": "Edit Mermaid flowcharts by drawing them on Canvas, and turn any canvas flowchart into Mermaid code. Works with standard Canvas files and Mermaid code blocks in your notes. Adds shapes, line styles, labels and a focus mode.",
   "author": "Paul Denni",
   "authorUrl": "",
   "isDesktopOnly": false
