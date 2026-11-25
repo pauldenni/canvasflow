@@ -1,5 +1,6 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { CardTools } from "./src/cardTools";
+import { canvasToMermaid } from "./src/mermaidExport";
 
 interface CanvasFlowSettings {
   enabledByDefault: boolean;
@@ -89,6 +90,18 @@ export default class CanvasFlowPlugin extends Plugin {
       id: "show-canvasflow-diagnostics",
       name: "Show CanvasFlow diagnostics",
       callback: () => this.showCanvasDiagnostics(),
+    });
+
+    this.addCommand({
+      id: "copy-as-mermaid",
+      name: "Copy canvas as Mermaid",
+      callback: () => this.copyAsMermaid(false),
+    });
+
+    this.addCommand({
+      id: "copy-as-mermaid-block",
+      name: "Copy canvas as Mermaid code block (for notes)",
+      callback: () => this.copyAsMermaid(true),
     });
 
     this.registerDomEvent(document, "pointerdown", (evt: PointerEvent) => this.handlePointerDown(evt), true);
@@ -481,6 +494,43 @@ export default class CanvasFlowPlugin extends Plugin {
   private removeBackButton() {
     this.backButtonEl?.remove();
     this.backButtonEl = null;
+  }
+
+  /**
+   * Copy the canvas as a Mermaid flowchart. With cards selected, only those
+   * cards and the lines between them are copied.
+   */
+  private async copyAsMermaid(asCodeBlock: boolean) {
+    const canvas = this.getCanvasObject();
+    let data: any = null;
+    try { data = canvas?.getData?.(); } catch {}
+    if (!canvas || !data) {
+      new Notice("Open a Canvas first");
+      return;
+    }
+
+    const selected = new Set<string>();
+    for (const item of Array.from((canvas.selection ?? []) as Set<any>)) {
+      if (item?.nodeEl && typeof item.id === "string") selected.add(item.id);
+    }
+
+    const result = canvasToMermaid(data, { onlyIds: selected });
+    if (result.nodeCount === 0) {
+      new Notice("Nothing to copy: the canvas has no cards");
+      return;
+    }
+
+    const text = asCodeBlock ? "```mermaid\n" + result.code + "\n```\n" : result.code;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      new Notice("Couldn't copy to the clipboard");
+      return;
+    }
+
+    const cards = `${result.nodeCount} ${result.nodeCount === 1 ? "card" : "cards"}`;
+    const lines = `${result.edgeCount} ${result.edgeCount === 1 ? "line" : "lines"}`;
+    new Notice(`Copied ${selected.size ? "selection" : "canvas"} as Mermaid (${cards}, ${lines})`);
   }
 
   private showCanvasDiagnostics() {

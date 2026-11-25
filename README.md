@@ -1,6 +1,6 @@
 # CanvasFlow - Obsidian Plugin
 
-CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), and line labels you can move, with more than one per line.
+CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), line labels you can move, with more than one per line, and copying a canvas as a Mermaid flowchart.
 
 ## CanvasFlow mode
 
@@ -55,6 +55,26 @@ Line styles and bends are saved on each line, and the line shape is saved with t
 Obsidian keeps line labels a readable size however far you zoom out, which can make them look large next to the cards. Turn off **Keep line labels readable when zoomed out** in settings and they shrink and grow like the text on cards, and hide once you zoom out far enough that cards show placeholders.
 
 A line's first label is Obsidian's own, so other apps show it (in the middle of the line). Its position is saved as `canvasflowLabelPos` and further labels as `canvasflowLabels`, on the line in the `.canvas` file. Undo works as usual.
+
+## Copy as Mermaid
+
+Turn a canvas into a [Mermaid](https://mermaid.js.org) flowchart you can paste into a note, GitHub or mermaid.live. Open the command palette and run:
+
+- **Copy canvas as Mermaid**: the flowchart code on its own.
+- **Copy canvas as Mermaid code block (for notes)**: the same, wrapped in a `mermaid` code block, ready to paste into a note.
+
+With cards selected, only those cards and the lines between them are copied. Otherwise the whole canvas is.
+
+What carries over:
+
+- **Cards**: text cards with their text, notes with their file name, links with their address.
+- **Shapes**: rectangle, rounded rectangle, circle, diamond, triangle, inverted triangle, parallelogram, trapezoid, hexagon, predefined process, document, documents, both cylinders, stored data, display, paper tape and both brace notes. Shapes Mermaid has no match for (star, cloud, the arrows, octagon, speech bubble) become rectangles.
+- **Groups**: as subgraphs, with the cards inside them.
+- **Lines**: arrowheads at either end, dashed or dotted lines (Mermaid has one dotted style for both), and thick or extra thick lines. A line's labels are stacked into one label.
+- **Colors**: card, group and line colors, and a shape's outline style and thickness.
+- **Direction**: top-down, left-to-right and so on, picked from the way most lines run.
+
+Mermaid lays the chart out itself, so positions, sizes, line bends and where labels sit are left out. Triangle, document, sideways cylinder, stored data, display, paper tape and brace shapes need Mermaid 11.3 or later.
 
 ## Locking cards
 
