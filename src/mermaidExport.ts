@@ -56,7 +56,7 @@ const NAMED_SHAPES: Record<string, string> = {
 };
 
 /** Obsidian's six preset card colours (default theme). */
-const PRESET_COLORS: Record<string, string> = {
+export const PRESET_COLORS: Record<string, string> = {
   "1": "#fb464c",
   "2": "#e9973f",
   "3": "#e0de71",

@@ -403,3 +403,21 @@ body.canvasflow-labels-zoom .canvas-wrapper.mod-zoomed-out .canvas-path-label-wr
 .canvas-path-label-wrapper.is-dragging .canvas-path-label {
   cursor: grabbing;
 }
+
+/* Add Mermaid flowchart dialog */
+.canvasflow-mermaid-input {
+  width: 100%;
+  height: 260px;
+  resize: vertical;
+  font-family: var(--font-monospace);
+  font-size: var(--font-smaller);
+  white-space: pre;
+  tab-size: 4;
+}
+
+.canvasflow-mermaid-error {
+  min-height: 1.5em;
+  margin-top: var(--size-4-2);
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+}

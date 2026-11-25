@@ -1,6 +1,6 @@
 # CanvasFlow - Obsidian Plugin
 
-CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), line labels you can move, with more than one per line, and copying a canvas as a Mermaid flowchart.
+CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), line labels you can move, with more than one per line, and Mermaid support: copy a canvas as a Mermaid flowchart, or add a Mermaid flowchart to a canvas.
 
 ## CanvasFlow mode
 
@@ -76,6 +76,23 @@ What carries over:
 
 Mermaid lays the chart out itself, so positions, sizes, line bends and where labels sit are left out. Triangle, document, sideways cylinder, stored data, display, paper tape and brace shapes need Mermaid 11.3 or later.
 
+## Add a Mermaid flowchart
+
+Turn Mermaid flowchart code into shapes, groups and lines on the canvas that you can then move and edit like any others.
+
+Open the command palette and run **Add Mermaid flowchart to canvas**. Paste or type the code in the box (it starts with what's on your clipboard, if that's a flowchart) and click **Add to canvas**, or press Cmd/Ctrl+Enter. A pasted `mermaid` code block from a note works as it is.
+
+The chart is laid out for you, in the direction the code asks for (`TD`, `LR` and so on), and added in the middle of the view. If that would put it on top of cards you already have, it goes to the right of them. The new cards are selected, so you can drag the whole chart somewhere else straight away.
+
+What carries over:
+
+- **Nodes**: as shapes, with their text. Mermaid's shapes map onto the matching CanvasFlow shape; ones with no match become rectangles.
+- **Subgraphs**: as groups, including subgraphs inside subgraphs.
+- **Lines**: arrowheads, dotted and thick lines, and labels. A line that runs back against the chart's direction loops round the side.
+- **Colors and outlines**: from `style`, `classDef`, `class`, `:::` and `linkStyle`. Stroke color (or fill, when there's no stroke) becomes the card or line color.
+
+Only flowcharts (`flowchart` or `graph`) can be added; sequence diagrams and other chart types can't. If the code can't be read, the box stays open and says which line is wrong. `click` actions, icons and Mermaid's circle and cross line ends aren't supported: circle and cross ends become arrows.
+
 ## Locking cards
 
 Select any card (text, note, image, link or group) and click the lock button in its action bar. A locked card:
@@ -111,3 +128,4 @@ If you keep the code somewhere else, the build can copy the plugin into your vau
 - Show CanvasFlow diagnostics
 - Copy canvas as Mermaid
 - Copy canvas as Mermaid code block (for notes)
+- Add Mermaid flowchart to canvas

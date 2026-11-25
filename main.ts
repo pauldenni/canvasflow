@@ -1,6 +1,7 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { CardTools } from "./src/cardTools";
 import { canvasToMermaid } from "./src/mermaidExport";
+import { mermaidToCanvas } from "./src/mermaidImport";
 
 interface CanvasFlowSettings {
   enabledByDefault: boolean;
@@ -102,6 +103,12 @@ export default class CanvasFlowPlugin extends Plugin {
       id: "copy-as-mermaid-block",
       name: "Copy canvas as Mermaid code block (for notes)",
       callback: () => this.copyAsMermaid(true),
+    });
+
+    this.addCommand({
+      id: "add-mermaid-flowchart",
+      name: "Add Mermaid flowchart to canvas",
+      callback: () => this.openMermaidImport(),
     });
 
     this.registerDomEvent(document, "pointerdown", (evt: PointerEvent) => this.handlePointerDown(evt), true);
@@ -533,6 +540,68 @@ export default class CanvasFlowPlugin extends Plugin {
     new Notice(`Copied ${selected.size ? "selection" : "canvas"} as Mermaid (${cards}, ${lines})`);
   }
 
+  /** Ask for Mermaid flowchart code (starting from the clipboard when it holds some) and add it to the canvas. */
+  private async openMermaidImport() {
+    const canvas = this.getCanvasObject();
+    if (!canvas || typeof canvas.importData !== "function") {
+      new Notice("Open a Canvas first");
+      return;
+    }
+    if (canvas.readonly) {
+      new Notice("This canvas is read-only");
+      return;
+    }
+
+    let clipboard = "";
+    try { clipboard = await navigator.clipboard.readText(); } catch {}
+    const looksLikeFlowchart = /^\s*(```\s*mermaid\s*\n)?\s*(---[\s\S]*?---\s*)?(%%.*\n\s*)*(flowchart|graph)\b/i.test(clipboard);
+
+    new MermaidImportModal(this.app, looksLikeFlowchart ? clipboard : "", code => this.addMermaidToCanvas(canvas, code)).open();
+  }
+
+  /**
+   * Add a flowchart to the canvas as shapes, groups and lines, and select it.
+   * It goes in the middle of the view, or beside the existing cards when it
+   * would land on top of them. Throws when the code can't be read.
+   */
+  private addMermaidToCanvas(canvas: CanvasObject, code: string) {
+    const center = canvas.posCenter?.() ?? { x: 0, y: 0 };
+    const result = mermaidToCanvas(code, center);
+    if (result.nodes.length === 0) throw new Error("The flowchart has no nodes");
+
+    const box = (items: any[]) => {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const item of items) {
+        minX = Math.min(minX, item.x); minY = Math.min(minY, item.y);
+        maxX = Math.max(maxX, item.x + item.width); maxY = Math.max(maxY, item.y + item.height);
+      }
+      return { minX, minY, maxX, maxY };
+    };
+    const existing: any[] = (canvas.getData?.()?.nodes ?? []).filter((n: any) => typeof n?.x === "number");
+    const added = box(result.nodes);
+    const overlaps = existing.some(n =>
+      n.x < added.maxX && n.x + n.width > added.minX && n.y < added.maxY && n.y + n.height > added.minY);
+    if (overlaps) {
+      const current = box(existing);
+      const dx = Math.round(current.maxX + 120 - added.minX);
+      const dy = Math.round((current.minY + current.maxY) / 2 - (added.minY + added.maxY) / 2);
+      for (const node of result.nodes) { node.x += dx; node.y += dy; }
+    }
+
+    const created = canvas.importData({ nodes: result.nodes, edges: result.edges }, false);
+    try {
+      canvas.deselectAll?.();
+      created?.forEach?.((node: any) => canvas.select?.(node));
+      canvas.zoomToSelection?.();
+    } catch {}
+    try { canvas.requestSave?.(); } catch {}
+    try { canvas.pushHistory?.(canvas.getData()); } catch {}
+
+    const cards = `${result.cardCount} ${result.cardCount === 1 ? "card" : "cards"}`;
+    const lines = `${result.edges.length} ${result.edges.length === 1 ? "line" : "lines"}`;
+    new Notice(`Added Mermaid flowchart (${cards}, ${lines})`);
+  }
+
   private showCanvasDiagnostics() {
     const view = this.getActiveCanvasView();
     const canvas = this.getCanvasObject();
@@ -555,6 +624,59 @@ export default class CanvasFlowPlugin extends Plugin {
 
     console.log("[CanvasFlow diagnostics]", diagnostics);
     new Notice("CanvasFlow diagnostics written to console");
+  }
+}
+
+/** A box to paste or type Mermaid flowchart code into. Stays open, showing what's wrong, when the code can't be read. */
+class MermaidImportModal extends Modal {
+  constructor(app: App, private initial: string, private onSubmit: (code: string) => void) {
+    super(app);
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    this.setTitle("Add Mermaid flowchart");
+    contentEl.addClass("canvasflow-mermaid-modal");
+
+    contentEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "Paste or type a Mermaid flowchart. It's added to the canvas as shapes, groups and lines that you can move and edit.",
+    });
+
+    const input = contentEl.createEl("textarea", { cls: "canvasflow-mermaid-input" });
+    input.spellcheck = false;
+    input.placeholder = "flowchart TD\n    A[Start] --> B{Decide}\n    B -->|Yes| C[Do it]\n    B -->|No| D[Stop]";
+    input.value = this.initial;
+
+    const errorEl = contentEl.createDiv({ cls: "canvasflow-mermaid-error" });
+
+    const submit = () => {
+      errorEl.setText("");
+      try {
+        this.onSubmit(input.value);
+      } catch (err: any) {
+        const where = typeof err?.line === "number" ? `Line ${err.line}: ` : "";
+        errorEl.setText(where + (err?.message ?? "This flowchart couldn't be read"));
+        return;
+      }
+      this.close();
+    };
+
+    new Setting(contentEl)
+      .addButton(button => button.setButtonText("Cancel").onClick(() => this.close()))
+      .addButton(button => button.setButtonText("Add to canvas").setCta().onClick(submit));
+
+    input.addEventListener("keydown", evt => {
+      if (evt.key === "Enter" && (evt.metaKey || evt.ctrlKey)) {
+        evt.preventDefault();
+        submit();
+      }
+    });
+    window.setTimeout(() => input.focus(), 0);
+  }
+
+  onClose() {
+    this.contentEl.empty();
   }
 }
 
