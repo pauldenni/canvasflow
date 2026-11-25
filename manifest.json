@@ -3,7 +3,7 @@
   "name": "CanvasFlow",
   "version": "0.5.0",
   "minAppVersion": "1.5.0",
-  "description": "Adds a focus mode to Obsidian Canvas that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), movable line labels, and Mermaid support: a live code panel, editing a note's Mermaid flowchart as a canvas, and copying or adding flowcharts.",
+  "description": "Edit Mermaid flowcharts by drawing them on Canvas, and turn any canvas flowchart into Mermaid code. Adds shapes, line styles and labels, card locking, and a focus mode that glides between cards.",
   "author": "Paul Denni",
   "authorUrl": "",
   "isDesktopOnly": false
