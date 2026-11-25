@@ -101,9 +101,13 @@ Dragging a selection that includes locked cards moves only the unlocked ones. Cl
 
 3. Restart Obsidian or reload the plugin.
 
+If you keep the code somewhere else, the build can copy the plugin into your vault for you. Create a file called `.vault-plugin-dir` next to `package.json` with one line, the full path to your vault's `.obsidian/plugins/canvasflow` folder. Every `npm run build` (and every rebuild under `npm run dev`) then copies `main.js`, `manifest.json` and `styles.css` there. The file is not committed, so each computer has its own.
+
 ## Commands
 
 - Toggle CanvasFlow Mode
 - Focus selected Canvas card
 - Back to canvas (exit focus)
 - Show CanvasFlow diagnostics
+- Copy canvas as Mermaid
+- Copy canvas as Mermaid code block (for notes)

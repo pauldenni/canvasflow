@@ -39,3 +39,4 @@ Thumbs.db
 # Obsidian plugin
 main.js
 data.json
+.vault-plugin-dir
