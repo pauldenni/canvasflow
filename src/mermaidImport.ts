@@ -7,7 +7,7 @@
  */
 
 import * as dagre from "@dagrejs/dagre";
-import { PRESET_COLORS } from "./mermaidExport";
+import { MERMAID_ID_KEY, PRESET_COLORS, isValidMermaidId } from "./mermaidExport";
 import { FlowDirection, FlowEdge, FlowNode, Flowchart, parseFlowchart } from "./mermaidParse";
 
 type AnyObj = any;
@@ -24,7 +24,7 @@ export interface MermaidImportResult {
  * Mermaid's shape names (and the aliases of its `@{ shape }` form) to
  * CanvasFlow shapes. Anything not listed becomes a rectangle.
  */
-const SHAPES: Record<string, string> = {
+export const MERMAID_SHAPES: Record<string, string> = {
   square: "rectangle", rect: "rectangle", rectangle: "rectangle", process: "rectangle", proc: "rectangle",
   round: "rectangle", rounded: "rectangle", event: "rectangle",
   stadium: "terminator", terminal: "terminator", pill: "terminator",
@@ -50,10 +50,10 @@ const SHAPES: Record<string, string> = {
   odd: "pentagon-arrow",
 };
 
-const GROUP_PAD = 30;
+export const GROUP_PAD = 30;
 /** Space between one row (or column) of cards and the next. */
-const ROW_GAP = 90;
-const EMPTY_GROUP = { width: 240, height: 120 };
+export const ROW_GAP = 90;
+export const EMPTY_GROUP = { width: 240, height: 120 };
 
 function round10(value: number): number {
   return Math.round(value / 10) * 10;
@@ -63,7 +63,7 @@ function round10(value: number): number {
  * A card size that fits the label. Cards can't be measured before they exist,
  * so this estimates from the text, then leaves room for the shape's corners.
  */
-function sizeFor(text: string, shape: string): { width: number; height: number } {
+export function sizeFor(text: string, shape: string): { width: number; height: number } {
   const lines = text.split("\n");
   const longest = Math.max(1, ...lines.map(l => l.length));
   let width = Math.min(320, Math.max(140, longest * 9 + 50));
@@ -106,7 +106,7 @@ function sizeFor(text: string, shape: string): { width: number; height: number }
 }
 
 /** A colour from Mermaid styles as a canvas colour: a preset number when it matches one, else #rrggbb. */
-function canvasColor(styles: Record<string, string>): string | undefined {
+export function canvasColor(styles: Record<string, string>): string | undefined {
   for (const key of ["stroke", "fill"]) {
     let value = (styles[key] ?? "").trim().toLowerCase();
     const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(value);
@@ -120,7 +120,7 @@ function canvasColor(styles: Record<string, string>): string | undefined {
 }
 
 /** `stroke-width` and `stroke-dasharray` as a CanvasFlow outline or line style. */
-function strokeOptions(styles: Record<string, string>, defaultWidth: number): AnyObj | undefined {
+export function strokeOptions(styles: Record<string, string>, defaultWidth: number): AnyObj | undefined {
   const out: AnyObj = {};
   const width = parseFloat(styles["stroke-width"] ?? "");
   if (Number.isFinite(width) && width > 0) {
@@ -133,14 +133,14 @@ function strokeOptions(styles: Record<string, string>, defaultWidth: number): An
   return Object.keys(out).length ? out : undefined;
 }
 
-function newId(): string {
+export function newId(): string {
   let id = "";
   for (let i = 0; i < 16; i++) id += Math.floor(Math.random() * 16).toString(16);
   return id;
 }
 
-type Side = "top" | "bottom" | "left" | "right";
-type Rect = { x: number; y: number; width: number; height: number };
+export type Side = "top" | "bottom" | "left" | "right";
+export type Rect = { x: number; y: number; width: number; height: number };
 
 /**
  * Which sides a line leaves and arrives by. Lines follow the chart's
@@ -149,7 +149,7 @@ type Rect = { x: number; y: number; width: number; height: number };
  * against the chart's direction leaves and arrives by the same side, so it
  * loops around the cards in between and not through them.
  */
-function sidesFor(from: Rect, to: Rect, direction: FlowDirection): [Side, Side] {
+export function sidesFor(from: Rect, to: Rect, direction: FlowDirection): [Side, Side] {
   const dx = (to.x + to.width / 2) - (from.x + from.width / 2);
   const dy = (to.y + to.height / 2) - (from.y + from.height / 2);
   const vertical = direction === "TD" || direction === "BT";
@@ -176,7 +176,7 @@ function sidesFor(from: Rect, to: Rect, direction: FlowDirection): [Side, Side] 
 export function mermaidToCanvas(source: string, center = { x: 0, y: 0 }): MermaidImportResult {
   const chart: Flowchart = parseFlowchart(source);
 
-  const shapeOf = (node: FlowNode) => SHAPES[node.shape] ?? "rectangle";
+  const shapeOf = (node: FlowNode) => MERMAID_SHAPES[node.shape] ?? "rectangle";
   const sizes = new Map<string, { width: number; height: number }>();
   for (const node of chart.nodes) sizes.set(node.id, sizeFor(node.text || " ", shapeOf(node)));
 
@@ -302,6 +302,7 @@ export function mermaidToCanvas(source: string, center = { x: 0, y: 0 }): Mermai
   const nodes: AnyObj[] = [];
   for (const sub of [...chart.subgraphs].sort((a, b) => depthOf(a) - depthOf(b))) {
     const group: AnyObj = { id: canvasIds.get(sub.id), type: "group", ...rects.get(sub.id)! };
+    if (isValidMermaidId(sub.id)) group[MERMAID_ID_KEY] = sub.id;
     if (sub.title.trim()) group.label = sub.title;
     const color = canvasColor(sub.styles);
     if (color) group.color = color;
@@ -312,6 +313,8 @@ export function mermaidToCanvas(source: string, center = { x: 0, y: 0 }): Mermai
       id: canvasIds.get(node.id), type: "text", text: node.text, ...rects.get(node.id)!,
       canvasflowShape: shapeOf(node),
     };
+    // Keep the name from the code (the A in A[Text]), so the card goes by it in the Mermaid panel.
+    if (isValidMermaidId(node.id)) card[MERMAID_ID_KEY] = node.id;
     const color = canvasColor(node.styles);
     if (color) card.color = color;
     const outline = strokeOptions(node.styles, 1);

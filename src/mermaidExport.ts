@@ -9,11 +9,21 @@
  * subgraphs), lines with their arrowheads, style and labels, and colours.
  */
 
+import { cleanText } from "./mermaidParse";
+
 type AnyObj = any;
+
+/** The name a card or group goes by in Mermaid code (the `A` in `A[Text]`), saved on it in the .canvas file. */
+export const MERMAID_ID_KEY = "canvasflowMermaidId";
 
 export interface MermaidExportOptions {
   /** Only export these cards and groups (and the lines between them). Empty or missing: export everything. */
   onlyIds?: Set<string>;
+  /**
+   * Names handed out earlier to cards that have none saved, by canvas id. New
+   * names are added to it, so a card keeps its name from one export to the next.
+   */
+  names?: Map<string, string>;
 }
 
 export interface MermaidExportResult {
@@ -103,6 +113,49 @@ function nodeText(node: AnyObj): string {
   }
 }
 
+/** A card's label as Mermaid code reads it back: plain lines, without heading or list marks. */
+export function exportedText(node: AnyObj): string {
+  return cleanText(quote(nodeText(node)));
+}
+
+/** The CanvasFlow shape a card comes back as after a trip through Mermaid: its own, or a rectangle when Mermaid has no match. */
+export function exportedShape(node: AnyObj): string {
+  const shape = node.type === "text" ? node.canvasflowShape : undefined;
+  return shape && (BRACKETS[shape] || NAMED_SHAPES[shape]) ? shape : "rectangle";
+}
+
+const ID_PATTERN = /^[\p{L}\p{N}_]+(?:[-.][\p{L}\p{N}_]+)*$/u;
+const RESERVED = /^(end|subgraph|graph|flowchart|style|class|classDef|linkStyle|click|direction|default|call|href)$/i;
+
+export function isValidMermaidId(id: unknown): id is string {
+  return typeof id === "string" && ID_PATTERN.test(id) && !RESERVED.test(id);
+}
+
+/**
+ * The Mermaid name of every card and group, by canvas id. A saved name wins,
+ * then one handed out earlier (`names`), then a new one: N1, N2... for cards
+ * and G1, G2... for groups, in reading order. Two cards never share a name
+ * (a copied card keeps its saved name only if the original isn't there).
+ */
+export function resolveMermaidIds(nodes: AnyObj[], names?: Map<string, string>): Map<string, string> {
+  const sorted = nodes.filter(n => n?.id).slice().sort(byPosition);
+  const ids = new Map<string, string>();
+  const used = new Set<string>();
+  const take = (node: AnyObj, name: unknown) => {
+    if (ids.has(node.id) || !isValidMermaidId(name) || used.has(name)) return;
+    ids.set(node.id, name);
+    used.add(name);
+  };
+  for (const node of sorted) take(node, node[MERMAID_ID_KEY]);
+  for (const node of sorted) take(node, names?.get(node.id));
+  let cards = 0, groups = 0;
+  for (const node of sorted) {
+    while (!ids.has(node.id)) take(node, node.type === "group" ? `G${++groups}` : `N${++cards}`);
+    names?.set(node.id, ids.get(node.id)!);
+  }
+  return ids;
+}
+
 function nodeDeclaration(id: string, node: AnyObj): string {
   const label = quote(nodeText(node));
   const shape = node.type === "text" ? node.canvasflowShape : undefined;
@@ -160,14 +213,42 @@ function isFlipped(edge: AnyObj): boolean {
   return hasArrow(edge.fromEnd, false) && !hasArrow(edge.toEnd, true);
 }
 
-function arrowFor(edge: AnyObj): string {
+export interface ExportedEdge {
+  /** Canvas ids, the way round the line is written in Mermaid. */
+  from: string;
+  to: string;
+  /** True when Mermaid's "from" is the canvas line's "to" end. */
+  flipped: boolean;
+  startArrow: boolean;
+  endArrow: boolean;
+  stroke: "normal" | "thick" | "dotted";
+  label: string;
+}
+
+/** A canvas line as Mermaid sees it. */
+export function exportedEdge(edge: AnyObj): ExportedEdge {
+  const flipped = isFlipped(edge);
   const start = hasArrow(edge.fromEnd, false);
   const end = hasArrow(edge.toEnd, true);
   const line = edge.canvasflowLine ?? {};
-  const kind = line.style === "dashed" || line.style === "dotted" ? "dotted"
-    : (line.width ?? 2) >= 4 ? "thick" : "normal";
-  const both = start && end;
-  const none = !start && !end;
+  const label = edgeLabel(edge);
+  return {
+    from: flipped ? edge.toNode : edge.fromNode,
+    to: flipped ? edge.fromNode : edge.toNode,
+    flipped,
+    startArrow: start && end,
+    endArrow: start || end,
+    stroke: line.style === "dashed" || line.style === "dotted" ? "dotted"
+      : (line.width ?? 2) >= 4 ? "thick" : "normal",
+    label: label ? cleanText(label) : "",
+  };
+}
+
+function arrowFor(edge: AnyObj): string {
+  const view = exportedEdge(edge);
+  const kind = view.stroke;
+  const both = view.startArrow && view.endArrow;
+  const none = !view.startArrow && !view.endArrow;
   if (kind === "dotted") return both ? "<-.->" : none ? "-.-" : "-.->";
   if (kind === "thick") return both ? "<==>" : none ? "===" : "==>";
   return both ? "<-->" : none ? "---" : "-->";
@@ -190,12 +271,10 @@ export function canvasToMermaid(data: AnyObj, options: MermaidExportOptions = {}
   const nodesById = new Map<string, AnyObj>(nodes.map(n => [n.id, n]));
   const edges = allEdges.filter(e => nodesById.has(e?.fromNode) && nodesById.has(e?.toNode));
 
-  // Short ids in reading order: N1, N2... for cards and G1, G2... for groups.
-  const ids = new Map<string, string>();
-  let cardCount = 0, groupCount = 0;
-  for (const node of nodes) {
-    ids.set(node.id, node.type === "group" ? `G${++groupCount}` : `N${++cardCount}`);
-  }
+  // Names are worked out over the whole canvas, so a card has the same one whether or not it's selected.
+  const ids = resolveMermaidIds(allNodes, options.names);
+  const groupCount = nodes.filter(n => n.type === "group").length;
+  const cardCount = nodes.length - groupCount;
 
   // Each card or group belongs to the smallest group that fully holds it.
   const groups = nodes.filter(n => n.type === "group");

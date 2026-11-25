@@ -2,6 +2,7 @@ import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from "obsidian"
 import { CardTools } from "./src/cardTools";
 import { canvasToMermaid } from "./src/mermaidExport";
 import { mermaidToCanvas } from "./src/mermaidImport";
+import { MERMAID_VIEW_TYPE, MermaidPanel } from "./src/mermaidPanel";
 
 interface CanvasFlowSettings {
   enabledByDefault: boolean;
@@ -103,6 +104,14 @@ export default class CanvasFlowPlugin extends Plugin {
       id: "copy-as-mermaid-block",
       name: "Copy canvas as Mermaid code block (for notes)",
       callback: () => this.copyAsMermaid(true),
+    });
+
+    this.registerView(MERMAID_VIEW_TYPE, leaf => new MermaidPanel(leaf));
+
+    this.addCommand({
+      id: "open-mermaid-panel",
+      name: "Open Mermaid code panel",
+      callback: () => this.openMermaidPanel(),
     });
 
     this.addCommand({
@@ -538,6 +547,19 @@ export default class CanvasFlowPlugin extends Plugin {
     const cards = `${result.nodeCount} ${result.nodeCount === 1 ? "card" : "cards"}`;
     const lines = `${result.edgeCount} ${result.edgeCount === 1 ? "line" : "lines"}`;
     new Notice(`Copied ${selected.size ? "selection" : "canvas"} as Mermaid (${cards}, ${lines})`);
+  }
+
+  /** Show the Mermaid code panel in the right sidebar, opening it if it isn't there yet. */
+  private async openMermaidPanel() {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(MERMAID_VIEW_TYPE)[0];
+    if (!leaf) {
+      const created = workspace.getRightLeaf(false);
+      if (!created) return;
+      leaf = created;
+      await leaf.setViewState({ type: MERMAID_VIEW_TYPE, active: true });
+    }
+    workspace.revealLeaf(leaf);
   }
 
   /** Ask for Mermaid flowchart code (starting from the clipboard when it holds some) and add it to the canvas. */

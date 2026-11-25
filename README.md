@@ -1,6 +1,6 @@
 # CanvasFlow - Obsidian Plugin
 
-CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), line labels you can move, with more than one per line, and Mermaid support: copy a canvas as a Mermaid flowchart, or add a Mermaid flowchart to a canvas.
+CanvasFlow is an experimental Obsidian plugin for Canvas. It adds a focus mode that glides between cards and centers the one you click, plus shapes, card formatting (align, bold and italic), card locking, line styles (dashed, dotted, thickness, straight and elbow lines), line labels you can move, with more than one per line, and Mermaid support: a live Mermaid code panel for the canvas, copying a canvas as a Mermaid flowchart, and adding a Mermaid flowchart to a canvas.
 
 ## CanvasFlow mode
 
@@ -93,6 +93,31 @@ What carries over:
 
 Only flowcharts (`flowchart` or `graph`) can be added; sequence diagrams and other chart types can't. If the code can't be read, the box stays open and says which line is wrong. `click` actions, icons and Mermaid's circle and cross line ends aren't supported: circle and cross ends become arrows.
 
+## Mermaid code panel
+
+See the canvas you're working on as Mermaid flowchart code, live in both directions, in the right sidebar.
+
+Open the command palette and run **Open Mermaid code panel**. The panel follows whichever canvas you're working in.
+
+- **Draw on the canvas** and the code updates: add, move, connect, relabel, recolor or delete cards and lines.
+- **Edit the code** and the canvas updates a moment after you stop typing. A line under the code says what changed.
+
+Editing the code changes only what you changed:
+
+- Cards keep their place and size. Changing a node's text, shape or color, or a line's label, arrowheads or style, updates that card or line where it is.
+- A node that's new in the code is added next to the card it connects to. A new subgraph becomes a group around its cards.
+- A node or line you delete from the code is removed from the canvas. Locked cards are never removed. If an edit would remove most of the canvas, the panel asks before applying it.
+- Code that can't be read is never applied. The panel says which line is wrong and the canvas stays as it was.
+- Undo on the canvas undoes a change made from the code.
+
+Each card goes by a short name in the code (`N1`, `N2`, or the name it had in Mermaid code you added). The first time you change the canvas from the code, the names are saved on the cards (`canvasflowMermaidId`), so the code keeps pointing at the same cards.
+
+Things to know:
+
+- The canvas is what's saved, and the code is written from it. While you type, the text is yours; when you click away it's rewritten in the panel's own layout, so comments and the order of your lines aren't kept.
+- Moving a card between subgraphs in the code, or changing the chart's direction (`TD`, `LR`), doesn't move cards that are already on the canvas. Drag them on the canvas instead.
+- What the code can't show (card positions and sizes, line bends, extra labels on a line, shapes Mermaid has no match for) is left alone when you edit the code.
+
 ## Locking cards
 
 Select any card (text, note, image, link or group) and click the lock button in its action bar. A locked card:
@@ -129,3 +154,4 @@ If you keep the code somewhere else, the build can copy the plugin into your vau
 - Copy canvas as Mermaid
 - Copy canvas as Mermaid code block (for notes)
 - Add Mermaid flowchart to canvas
+- Open Mermaid code panel

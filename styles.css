@@ -421,3 +421,61 @@ body.canvasflow-labels-zoom .canvas-wrapper.mod-zoomed-out .canvas-path-label-wr
   color: var(--text-error);
   font-size: var(--font-ui-small);
 }
+
+/* Mermaid code panel */
+.canvasflow-mermaid-panel {
+  display: flex;
+  flex-direction: column;
+  padding: var(--size-4-2);
+}
+
+.canvasflow-mermaid-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  padding: var(--size-4-2);
+}
+
+.canvasflow-mermaid-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--size-4-2);
+}
+
+.canvasflow-mermaid-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+}
+
+.canvasflow-mermaid-title {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvasflow-mermaid-input.canvasflow-mermaid-code {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 160px;
+  resize: none;
+}
+
+.canvasflow-mermaid-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+  min-height: 2em;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.canvasflow-mermaid-status[data-kind="ok"] { color: var(--text-success); }
+.canvasflow-mermaid-status[data-kind="error"] { color: var(--text-error); }
+.canvasflow-mermaid-status[data-kind="warning"] { color: var(--text-warning); }
+.canvasflow-mermaid-status button { flex: none; }
